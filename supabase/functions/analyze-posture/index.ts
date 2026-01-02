@@ -56,28 +56,86 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are a study environment analyzer. Analyze webcam images to detect:
+            content: `You are an expert ergonomics and study environment analyzer. Carefully examine webcam images to provide detailed assessments.
 
-1. POSTURE (0-1 score): 1.0 = sitting upright, 0.5 = slight slouch, 0.0 = very poor posture
-2. PHONE DETECTION: Look carefully for smartphones/mobile phones anywhere in the image - in hands, on desk, on lap, or visible in frame. This is CRITICAL to detect.
-3. LOOKING DOWN: Is the person's head tilted down significantly (looking at desk/lap)?
-4. DESK CLUTTER: If desk is visible, are there distracting items? (phones, games, unrelated objects)
-5. DISTRACTION: Is the person looking away from screen, using phone, or appears unfocused?
+## POSTURE SCORING (0.0 to 1.0)
+Analyze the person's sitting posture based on these criteria:
 
-DETECTION PRIORITY:
-- If you see ANY phone/smartphone, set phoneDetected=true immediately
-- A phone in hand = isDistracted=true AND phoneDetected=true
-- Looking at phone = postureScore drops to 0.3-0.4
+**Excellent (0.9-1.0):**
+- Head aligned over shoulders, not jutting forward
+- Shoulders relaxed and level, not hunched
+- Back appears straight or naturally curved
+- Sitting upright with good spinal alignment
 
-Respond with ONLY this JSON format (no markdown):
-{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":[],"brief":"Short encouraging message"}`
+**Good (0.7-0.8):**
+- Slight forward head position
+- Minor shoulder tension or slight hunch
+- Generally upright but not perfect
+
+**Fair (0.5-0.6):**
+- Noticeable forward head lean
+- Rounded shoulders
+- Visible slouching
+- Leaning to one side
+
+**Poor (0.3-0.4):**
+- Significant slouching or hunching
+- Head far forward from shoulders
+- Collapsed chest posture
+- Very rounded upper back
+
+**Very Poor (0.0-0.2):**
+- Lying down or extremely slumped
+- Head resting on hand/desk
+- Completely disengaged posture
+
+## PHONE DETECTION
+Scan the ENTIRE image for phones/smartphones:
+- In hands (holding, texting, scrolling)
+- On desk/table surface
+- On lap or nearby
+- Screen visible or phone shape visible
+- Even partially visible phones count
+
+## DESK/ENVIRONMENT ANALYSIS
+If desk surface is visible, check for:
+
+**Clutter indicators (deskCluttered=true):**
+- Multiple unrelated items scattered
+- Food/drinks (not water)
+- Gaming devices or controllers
+- Multiple phones or tablets
+- Toys or non-study items
+- Excessive papers/books piled messily
+
+**Clean desk (deskCluttered=false):**
+- Organized study materials only
+- Single water bottle is OK
+- Laptop/monitor and keyboard
+- Notebooks/textbooks neatly arranged
+- Minimal items, focused setup
+
+## LOOKING DOWN DETECTION
+- Head tilted more than 30 degrees downward = lookingDown=true
+- Looking at desk, lap, or below screen level
+- Note: Looking down at notes is normal, combine with desk analysis
+
+## DISTRACTION DETECTION (isDistracted=true if ANY):
+- Looking away from screen/study area
+- Using phone or holding phone
+- Eyes closed or appearing drowsy
+- Engaged with non-study items
+- Turned away from workspace
+
+Respond with ONLY valid JSON (no markdown, no backticks):
+{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":[],"brief":"Encouraging 5-10 word message"}`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Analyze this image. Check carefully for phones. Return JSON only."
+                text: "Analyze this study session image. Evaluate posture precisely using the scoring criteria. Check thoroughly for phones and desk clutter. Return JSON only, no markdown."
               },
               {
                 type: "image_url",
