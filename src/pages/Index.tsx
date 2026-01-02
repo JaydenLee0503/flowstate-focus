@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { RadioGroup, Listbox, Transition } from '@headlessui/react';
 import { Check, ChevronDown, Sparkles } from 'lucide-react';
 import { useSession, StudyGoal, EnergyLevel } from '@/context/SessionContext';
-
+import { AIChatbot } from '@/components/AIChatbot';
 const studyGoals: { value: StudyGoal; label: string; description: string }[] = [
   { value: 'reading', label: 'Reading / Review', description: 'Absorbing and reviewing material' },
   { value: 'problem-solving', label: 'Problem Solving', description: 'Working through exercises' },
@@ -155,6 +155,9 @@ const Index = () => {
           No account needed. Your session stays private.
         </p>
       </div>
+
+      {/* Floating AI Chatbot */}
+      <AIChatbot />
     </main>
   );
 };
