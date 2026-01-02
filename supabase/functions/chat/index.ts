@@ -20,9 +20,13 @@ serve(async (req) => {
   try {
     const { messages, studyGoal, energyLevel } = await req.json();
     
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
+    if (!XAI_API_KEY) {
+      console.error("XAI_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "Chat is not configured yet." }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const systemPrompt = `You are Flow, a calm and supportive AI study companion for FLOWSTATE.
@@ -45,14 +49,17 @@ Context:
 
 Remember: You're a supportive companion, not a productivity coach or therapist.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    console.log("Starting chat with Grok API...");
+
+    // Use Grok API (xAI)
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${XAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "grok-2-latest",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -62,25 +69,28 @@ Remember: You're a supportive companion, not a productivity coach or therapist.`
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Grok API error:", response.status, errorText);
+      
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "I'm a bit busy right now. Try again in a moment!" }),
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 401 || response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "AI credits needed. Please check your settings." }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: "API key issue. Please check configuration." }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "Something went wrong. Let's try again!" }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log("Grok API response OK, streaming...");
 
     return new Response(response.body, {
       headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },
