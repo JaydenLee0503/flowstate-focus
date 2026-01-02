@@ -19,6 +19,7 @@ const Session = () => {
   const [seconds, setSeconds] = useState(0);
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState<'environment' | 'posture'>('posture');
   
   // AI Vision-powered attention/posture detection (Gemini)
   const { 
@@ -34,7 +35,7 @@ const Session = () => {
     videoRef,
     startCamera, 
     stopCamera 
-  } = useVisionPostureDetection();
+  } = useVisionPostureDetection(analysisMode);
 
   // LLM-powered nudge generation (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
@@ -209,6 +210,30 @@ const Session = () => {
                 </div>
               )}
               
+              {/* Analysis Mode Selector */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setAnalysisMode('posture')}
+                  className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all duration-150 ${
+                    analysisMode === 'posture'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Analyze Posture
+                </button>
+                <button
+                  onClick={() => setAnalysisMode('environment')}
+                  className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all duration-150 ${
+                    analysisMode === 'environment'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Analyze Environment
+                </button>
+              </div>
+              
               <button
                 onClick={() => isUsingCamera ? stopCamera() : startCamera()}
                 disabled={isCameraLoading}
@@ -226,7 +251,7 @@ const Session = () => {
                     <span>Disable Camera</span>
                   </>
                 ) : (
-                  <span>Enable camera for real posture tracking</span>
+                  <span>Enable camera for AI analysis</span>
                 )}
               </button>
             </div>
