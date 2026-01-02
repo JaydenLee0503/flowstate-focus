@@ -46,7 +46,7 @@ serve(async (req) => {
     }
 
     // Different prompts based on analysis mode
-    const posturePrompt = `You are an expert ergonomics analyzer. Focus on the PERSON'S POSTURE.
+    const posturePrompt = `You are an expert ergonomics analyzer. Focus on the PERSON'S POSTURE and ALERTNESS.
 
 ## POSTURE SCORING (0.0 to 1.0)
 **Excellent (0.9-1.0):** Head aligned over shoulders, shoulders relaxed and level, back straight, good spinal alignment
@@ -58,16 +58,24 @@ serve(async (req) => {
 ## LOOKING DOWN
 - Head tilted more than 30 degrees downward = lookingDown=true
 
+## EYE/DROWSINESS DETECTION (CRITICAL - check carefully)
+Set eyesClosed=true if ANY of these:
+- Eyes are fully closed or nearly closed
+- Eyes are half-closed, droopy, or heavy-lidded
+- Person appears to be blinking slowly or excessively
+- Face shows signs of fatigue or sleepiness
+- Person appears to be nodding off or head drooping
+
 ## DISTRACTION (isDistracted=true if ANY):
 - Looking away from screen
-- Eyes closed or drowsy
+- Eyes closed or drowsy (also set eyesClosed=true)
 - Turned away from workspace
 
 ## PHONE CHECK
 Quick scan: Is the person holding or using a phone?
 
 Respond with ONLY valid JSON (no markdown):
-{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":[],"brief":"Encouraging 5-10 word posture message"}`;
+{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"eyesClosed":false,"distractingItems":[],"brief":"Encouraging 5-10 word posture message"}`;
 
     const environmentPrompt = `You are an expert study environment analyzer. Focus on the DESK and WORKSPACE.
 
@@ -99,11 +107,15 @@ Scan the ENTIRE desk surface and visible area:
 - Phone on lap or chair
 - Multiple devices
 
+## PERSON CHECK (if visible)
+- Are their eyes open and alert?
+- Set eyesClosed=true if eyes are closing, drowsy, or showing fatigue
+
 ## POSTURE (Secondary - just quick check)
 Quick assessment: Is the person slouching badly? Score roughly.
 
 Respond with ONLY valid JSON (no markdown):
-{"postureScore":0.7,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":["list","items","here"],"brief":"Encouraging 5-10 word workspace message"}`;
+{"postureScore":0.7,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"eyesClosed":false,"distractingItems":["list","items","here"],"brief":"Encouraging 5-10 word workspace message"}`;
 
     const systemPrompt = analysisMode === 'environment' ? environmentPrompt : posturePrompt;
     const userPrompt = analysisMode === 'environment' 
@@ -185,6 +197,7 @@ Respond with ONLY valid JSON (no markdown):
       phoneDetected: false,
       lookingDown: false,
       deskCluttered: false,
+      eyesClosed: false,
       distractingItems: [],
       brief: "" 
     };
@@ -201,20 +214,25 @@ Respond with ONLY valid JSON (no markdown):
 
     // Determine distraction level based on multiple factors
     const isDistractedOverall = result.isDistracted || result.phoneDetected || 
-      (result.lookingDown && result.deskCluttered);
+      result.eyesClosed || (result.lookingDown && result.deskCluttered);
     
-    // Adjust posture score if phone detected or desk is cluttered
+    // Adjust posture score if phone detected, eyes closed, or desk is cluttered
     let adjustedPostureScore = result.postureScore || 0.7;
     if (result.phoneDetected) {
       adjustedPostureScore = Math.min(adjustedPostureScore, 0.4);
+    }
+    if (result.eyesClosed) {
+      adjustedPostureScore = Math.min(adjustedPostureScore, 0.3);
     }
     if (result.lookingDown && result.deskCluttered) {
       adjustedPostureScore = Math.min(adjustedPostureScore, 0.5);
     }
 
-    // Generate appropriate message based on findings
+    // Generate appropriate message based on findings - prioritize eye closure
     let analysisMessage = result.brief || "Looking good!";
-    if (result.phoneDetected) {
+    if (result.eyesClosed) {
+      analysisMessage = "Your eyes look tired! Take a quick break or splash some water on your face.";
+    } else if (result.phoneDetected) {
       analysisMessage = "Phone spotted! Maybe tuck it away for better focus.";
     } else if (result.lookingDown && result.deskCluttered) {
       analysisMessage = "Your desk looks busy—a quick tidy might help focus.";
@@ -228,6 +246,7 @@ Respond with ONLY valid JSON (no markdown):
       phoneDetected: result.phoneDetected,
       lookingDown: result.lookingDown,
       deskCluttered: result.deskCluttered,
+      eyesClosed: result.eyesClosed,
       distractingItems: result.distractingItems
     });
 
@@ -238,6 +257,7 @@ Respond with ONLY valid JSON (no markdown):
         phoneDetected: Boolean(result.phoneDetected),
         lookingDown: Boolean(result.lookingDown),
         deskCluttered: Boolean(result.deskCluttered),
+        eyesClosed: Boolean(result.eyesClosed),
         distractingItems: result.distractingItems || [],
         analysis: analysisMessage
       }),
@@ -253,6 +273,7 @@ Respond with ONLY valid JSON (no markdown):
         phoneDetected: false,
         lookingDown: false,
         deskCluttered: false,
+        eyesClosed: false,
         distractingItems: [],
         analysis: "Analysis error",
         error: error instanceof Error ? error.message : "Unknown error"
