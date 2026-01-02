@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
+import { useSimulatedAttention } from '@/hooks/useSimulatedAttention';
 
 const goalLabels: Record<string, string> = {
   reading: 'Reading / Review',
@@ -10,21 +11,20 @@ const goalLabels: Record<string, string> = {
   memorization: 'Memorization',
 };
 
-// TODO: Replace with actual AI-generated nudges based on posture/attention signals
-const placeholderNudges = [
-  "You're doing well. Stay relaxed and upright.",
-  "Take a deep breath. You're making progress.",
-  "Great focus. Keep your shoulders relaxed.",
-  "Remember to blink and rest your eyes briefly.",
-];
-
 const Session = () => {
   const navigate = useNavigate();
   const { studyGoal, energyLevel, setSessionDuration } = useSession();
   const [seconds, setSeconds] = useState(0);
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
-  const [currentNudge, setCurrentNudge] = useState(placeholderNudges[0]);
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
+  
+  // AI-powered attention/posture detection
+  const { postureScore, isDistracted } = useSimulatedAttention();
+  
+  // Generate AI suggestion based on posture/attention signals
+  const aiSuggestion = isDistracted
+    ? "You might be slouching a bit—try a gentle posture reset."
+    : "Nice work. Stay relaxed and upright.";
 
   // Redirect if no session data
   useEffect(() => {
@@ -52,15 +52,6 @@ const Session = () => {
     }
   }, [seconds]);
 
-  // Rotate nudges periodically
-  // TODO: Replace with real-time AI nudges based on sensor data
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const randomIndex = Math.floor(Math.random() * placeholderNudges.length);
-      setCurrentNudge(placeholderNudges[randomIndex]);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
 
   const formatTime = useCallback((totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -124,8 +115,17 @@ const Session = () => {
           {/* AI Nudge */}
           <div className="max-w-sm mx-auto px-6 py-5 bg-card rounded-2xl border border-border shadow-medium">
             <p className="text-sm text-muted-foreground text-center leading-relaxed">
-              "{currentNudge}"
+              "{aiSuggestion}"
             </p>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <div className="text-xs text-muted-foreground">Posture:</div>
+              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 rounded-full ${postureScore > 0.6 ? 'bg-flow-high' : postureScore > 0.3 ? 'bg-flow-medium' : 'bg-destructive'}`}
+                  style={{ width: `${postureScore * 100}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
