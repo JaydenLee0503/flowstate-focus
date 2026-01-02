@@ -74,18 +74,18 @@ const Session = () => {
   };
 
   const flowConfig = {
-    building: { label: 'Building Focus', color: 'bg-flow-low', width: '33%' },
-    flowing: { label: 'In Flow', color: 'bg-flow-medium', width: '66%' },
-    deep: { label: 'Deep Focus', color: 'bg-flow-high', width: '100%' },
+    building: { label: 'Building Focus', color: 'bg-flow-low', barColor: 'from-flow-low to-flow-medium', width: '33%' },
+    flowing: { label: 'In Flow', color: 'bg-flow-medium', barColor: 'from-flow-medium to-flow-high', width: '66%' },
+    deep: { label: 'Deep Focus', color: 'bg-flow-high', barColor: 'from-flow-high to-primary', width: '100%' },
   };
 
   if (!studyGoal) return null;
 
   return (
-    <main className="min-h-screen bg-background flex flex-col px-6 py-8">
+    <main className="min-h-screen bg-gradient-to-b from-background to-accent/10 flex flex-col px-6 py-8">
       {/* Top: Task Label */}
       <header className="text-center animate-fade-in">
-        <span className="inline-block text-xs font-medium text-muted-foreground uppercase tracking-wider px-3 py-1.5 bg-secondary rounded-full">
+        <span className="inline-block text-xs font-semibold text-primary uppercase tracking-wider px-4 py-2 bg-accent rounded-full border border-primary/20">
           {goalLabels[studyGoal]} Session
         </span>
       </header>
@@ -94,36 +94,37 @@ const Session = () => {
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="text-center stagger-children">
           {/* Large Timer */}
-          <div className="mb-10">
-            <span className="text-7xl md:text-8xl font-light tracking-tight text-foreground tabular-nums">
+          <div className="mb-8">
+            <span className="text-8xl md:text-9xl font-extralight tracking-tight text-foreground tabular-nums">
               {formatTime(seconds)}
             </span>
           </div>
 
           {/* Flow Indicator */}
-          <div className="flex flex-col items-center gap-3 mb-14">
-            <div className="flex items-center gap-2.5">
+          <div className="flex flex-col items-center gap-4 mb-12">
+            <div className="flex items-center gap-3">
               <div
-                className={`w-2.5 h-2.5 rounded-full ${flowConfig[flowLevel].color} animate-pulse-soft`}
+                className={`w-3 h-3 rounded-full ${flowConfig[flowLevel].color} animate-pulse-soft shadow-lg`}
+                style={{ boxShadow: `0 0 12px 2px hsl(var(--flow-${flowLevel === 'deep' ? 'high' : flowLevel}))` }}
               />
-              <span className="text-sm font-medium text-foreground">
+              <span className="text-sm font-semibold text-foreground">
                 {flowConfig[flowLevel].label}
               </span>
             </div>
             
             {/* Flow Bar */}
-            <div className="w-52 h-1 bg-muted rounded-full overflow-hidden">
+            <div className="w-56 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
-                className={`h-full ${flowConfig[flowLevel].color} transition-all duration-1000 ease-out`}
+                className={`h-full bg-gradient-to-r ${flowConfig[flowLevel].barColor} transition-all duration-1000 ease-out rounded-full`}
                 style={{ width: flowConfig[flowLevel].width }}
               />
             </div>
           </div>
 
           {/* AI Nudge */}
-          <div className="max-w-sm mx-auto px-5 py-4 bg-card rounded-xl border border-border shadow-soft">
+          <div className="max-w-sm mx-auto px-6 py-5 bg-card rounded-2xl border border-border shadow-medium">
             <p className="text-sm text-muted-foreground text-center leading-relaxed">
-              {currentNudge}
+              "{currentNudge}"
             </p>
           </div>
         </div>
@@ -133,7 +134,7 @@ const Session = () => {
       <footer className="flex justify-center pt-8 animate-fade-in" style={{ animationDelay: '0.3s' }}>
         <button
           onClick={() => setIsEndDialogOpen(true)}
-          className="px-6 py-2.5 rounded-lg text-sm font-medium text-muted-foreground bg-secondary hover:bg-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+          className="px-8 py-3 rounded-xl text-sm font-medium text-muted-foreground border border-border bg-card hover:bg-secondary hover:text-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
         >
           End Session
         </button>
@@ -151,7 +152,7 @@ const Session = () => {
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-foreground/10 backdrop-blur-sm" />
+            <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm" />
           </Transition.Child>
 
           <div className="fixed inset-0 overflow-y-auto">
@@ -165,24 +166,24 @@ const Session = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded-xl bg-card p-6 shadow-lg ring-1 ring-border transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-medium text-foreground mb-2">
+                <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded-2xl bg-card p-6 shadow-xl border border-border transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-semibold text-foreground mb-2">
                     End this session?
                   </Dialog.Title>
                   <Dialog.Description className="text-sm text-muted-foreground mb-6">
-                    You've been studying for {formatTime(seconds)}. Ready to reflect on your session?
+                    You've been studying for {formatTime(seconds)}. Ready to reflect on your progress?
                   </Dialog.Description>
 
                   <div className="flex gap-3">
                     <button
                       onClick={() => setIsEndDialogOpen(false)}
-                      className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-foreground bg-secondary hover:bg-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      className="flex-1 px-4 py-3 rounded-xl text-sm font-medium text-foreground bg-secondary hover:bg-muted transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     >
                       Continue
                     </button>
                     <button
                       onClick={handleEndSession}
-                      className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 shadow-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     >
                       End Session
                     </button>
