@@ -147,13 +147,13 @@ const Session = () => {
           </div>
 
           {/* AI Nudge - LLM-generated supportive messages */}
-          <div className="max-w-sm mx-auto px-6 py-5 bg-card rounded-2xl border border-border shadow-medium">
-            <p className={`text-sm text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
+          <div className="max-w-md mx-auto px-8 py-7 bg-card rounded-2xl border border-border shadow-medium">
+            <p className={`text-base text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
               "{aiSuggestion}"
             </p>
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <div className="text-xs text-muted-foreground">Posture:</div>
-              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <div className="text-sm text-muted-foreground">Posture:</div>
+              <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={`h-full transition-all duration-500 rounded-full ${postureScore > 0.6 ? 'bg-flow-high' : postureScore > 0.3 ? 'bg-flow-medium' : 'bg-destructive'}`}
                   style={{ width: `${postureScore * 100}%` }}
@@ -162,9 +162,9 @@ const Session = () => {
             </div>
             
             {/* Camera Preview & Toggle */}
-            <div className="mt-4 pt-3 border-t border-border">
+            <div className="mt-5 pt-4 border-t border-border">
               {isUsingCamera && (
-                <div className="mb-3">
+                <div className="mb-4">
                   <div 
                     ref={videoContainerRef}
                     className="w-full aspect-video bg-muted rounded-xl overflow-hidden border border-border"
@@ -175,7 +175,7 @@ const Session = () => {
               <button
                 onClick={() => isUsingCamera ? stopCamera() : startCamera()}
                 disabled={isCameraLoading}
-                className={`w-full text-xs transition-colors duration-150 flex items-center justify-center gap-2 py-2 rounded-lg ${
+                className={`w-full text-sm transition-colors duration-150 flex items-center justify-center gap-2 py-3 rounded-lg ${
                   isUsingCamera 
                     ? 'text-destructive hover:bg-destructive/10' 
                     : 'text-muted-foreground hover:text-foreground'
@@ -185,7 +185,7 @@ const Session = () => {
                   <span>Starting camera...</span>
                 ) : isUsingCamera ? (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-destructive" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-destructive" />
                     <span>Disable Camera</span>
                   </>
                 ) : (
