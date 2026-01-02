@@ -2,56 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    /* FLOWSTATE - Calm, minimal design system */
-    /* Sage green palette for focus and calm */
-    --background: 40 20% 98%;
-    --foreground: 200 15% 15%;
+    /* FLOWSTATE - Light blue & white palette */
+    --background: 210 40% 99%;
+    --foreground: 215 25% 15%;
 
-    --card: 40 20% 99%;
-    --card-foreground: 200 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
 
-    --popover: 40 20% 99%;
-    --popover-foreground: 200 15% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
 
-    /* Sage green - calming, focus-inducing */
-    --primary: 150 25% 45%;
-    --primary-foreground: 40 20% 99%;
+    /* Primary - Soft blue */
+    --primary: 210 90% 55%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Warm gray for secondary elements */
-    --secondary: 40 10% 94%;
-    --secondary-foreground: 200 15% 25%;
+    /* Secondary - Light blue tint */
+    --secondary: 210 60% 96%;
+    --secondary-foreground: 215 25% 25%;
 
-    --muted: 40 10% 92%;
-    --muted-foreground: 200 10% 50%;
+    --muted: 210 30% 95%;
+    --muted-foreground: 215 15% 50%;
 
-    /* Soft sage accent */
-    --accent: 150 20% 90%;
-    --accent-foreground: 150 25% 35%;
+    /* Accent - Subtle blue */
+    --accent: 210 80% 94%;
+    --accent-foreground: 210 90% 40%;
 
-    --destructive: 0 60% 50%;
-    --destructive-foreground: 40 20% 99%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 40 15% 88%;
-    --input: 40 15% 88%;
-    --ring: 150 25% 45%;
+    --border: 210 30% 90%;
+    --input: 210 30% 90%;
+    --ring: 210 90% 55%;
 
-    --radius: 0.75rem;
+    --radius: 0.625rem;
 
     /* Flow indicator colors */
-    --flow-low: 35 80% 55%;
-    --flow-medium: 45 85% 55%;
-    --flow-high: 150 40% 50%;
+    --flow-low: 35 85% 55%;
+    --flow-medium: 45 90% 52%;
+    --flow-high: 210 90% 55%;
 
     /* Shadows */
-    --shadow-soft: 0 2px 8px -2px hsl(200 15% 15% / 0.06);
-    --shadow-medium: 0 4px 16px -4px hsl(200 15% 15% / 0.08);
+    --shadow-soft: 0 1px 3px 0 hsl(210 30% 15% / 0.04), 0 1px 2px -1px hsl(210 30% 15% / 0.04);
+    --shadow-medium: 0 4px 6px -1px hsl(210 30% 15% / 0.05), 0 2px 4px -2px hsl(210 30% 15% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(210 30% 15% / 0.06), 0 4px 6px -4px hsl(210 30% 15% / 0.06);
 
     /* Transitions */
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -64,33 +65,33 @@
   }
 
   .dark {
-    --background: 200 15% 8%;
-    --foreground: 40 20% 95%;
+    --background: 215 25% 8%;
+    --foreground: 210 40% 96%;
 
-    --card: 200 15% 10%;
-    --card-foreground: 40 20% 95%;
+    --card: 215 25% 10%;
+    --card-foreground: 210 40% 96%;
 
-    --popover: 200 15% 10%;
-    --popover-foreground: 40 20% 95%;
+    --popover: 215 25% 10%;
+    --popover-foreground: 210 40% 96%;
 
-    --primary: 150 30% 55%;
-    --primary-foreground: 200 15% 8%;
+    --primary: 210 90% 60%;
+    --primary-foreground: 215 25% 8%;
 
-    --secondary: 200 10% 15%;
-    --secondary-foreground: 40 20% 90%;
+    --secondary: 215 20% 16%;
+    --secondary-foreground: 210 40% 90%;
 
-    --muted: 200 10% 18%;
-    --muted-foreground: 40 10% 60%;
+    --muted: 215 20% 18%;
+    --muted-foreground: 210 20% 60%;
 
-    --accent: 150 20% 20%;
-    --accent-foreground: 150 30% 70%;
+    --accent: 210 40% 20%;
+    --accent-foreground: 210 90% 70%;
 
-    --destructive: 0 60% 40%;
-    --destructive-foreground: 40 20% 95%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 200 10% 20%;
-    --input: 200 10% 20%;
-    --ring: 150 30% 55%;
+    --border: 215 20% 20%;
+    --input: 215 20% 20%;
+    --ring: 210 90% 60%;
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
@@ -113,8 +114,9 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
   }
 }
 
@@ -124,25 +126,11 @@
   }
 }
 
-/* Flow indicator animation */
-@keyframes pulse-soft {
-  0%, 100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.animate-pulse-soft {
-  animation: pulse-soft 3s ease-in-out infinite;
-}
-
-/* Fade in animation */
+/* Animations */
 @keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -150,18 +138,51 @@
   }
 }
 
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .animate-fade-in {
-  animation: fade-in 0.5s ease-out forwards;
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-fade-in-scale {
+  animation: fade-in-scale 0.3s ease-out forwards;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.5s ease-in-out infinite;
 }
 
 /* Stagger children animations */
 .stagger-children > * {
   opacity: 0;
-  animation: fade-in 0.5s ease-out forwards;
+  animation: fade-in 0.4s ease-out forwards;
 }
 
-.stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
-.stagger-children > *:nth-child(2) { animation-delay: 0.2s; }
-.stagger-children > *:nth-child(3) { animation-delay: 0.3s; }
-.stagger-children > *:nth-child(4) { animation-delay: 0.4s; }
-.stagger-children > *:nth-child(5) { animation-delay: 0.5s; }
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+
+/* Headless UI focus styles */
+[data-headlessui-state~="focus"] {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
