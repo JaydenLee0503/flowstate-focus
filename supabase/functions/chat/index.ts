@@ -20,9 +20,9 @@ serve(async (req) => {
   try {
     const { messages, studyGoal, energyLevel } = await req.json();
     
-    const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
-    if (!XAI_API_KEY) {
-      console.error("XAI_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+    if (!GROQ_API_KEY) {
+      console.error("GROQ_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "Chat is not configured yet." }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -49,17 +49,17 @@ Context:
 
 Remember: You're a supportive companion, not a productivity coach or therapist.`;
 
-    console.log("Starting chat with Grok API...");
+    console.log("Starting chat with Groq API...");
 
-    // Use Grok API (xAI)
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    // Use Groq API
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${XAI_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-2-latest",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -70,7 +70,7 @@ Remember: You're a supportive companion, not a productivity coach or therapist.`
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Grok API error:", response.status, errorText);
+      console.error("Groq API error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -90,7 +90,7 @@ Remember: You're a supportive companion, not a productivity coach or therapist.`
       );
     }
 
-    console.log("Grok API response OK, streaming...");
+    console.log("Groq API response OK, streaming...");
 
     return new Response(response.body, {
       headers: { ...corsHeaders, 'Content-Type': 'text/event-stream' },

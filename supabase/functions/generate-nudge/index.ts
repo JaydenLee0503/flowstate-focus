@@ -35,9 +35,9 @@ serve(async (req) => {
   try {
     const { isDistracted, studyGoal, energyLevel } = await req.json();
     
-    const XAI_API_KEY = Deno.env.get('XAI_API_KEY');
-    if (!XAI_API_KEY) {
-      console.log("XAI_API_KEY not configured, using fallback");
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+    if (!GROQ_API_KEY) {
+      console.log("GROQ_API_KEY not configured, using fallback");
       return new Response(
         JSON.stringify({ 
           nudge: isDistracted ? FALLBACK_MESSAGES.distracted : FALLBACK_MESSAGES.focused 
@@ -64,15 +64,15 @@ Context:
 
 Respond with ONLY the nudge sentence, no quotes or punctuation at the start.`;
 
-    // Use Grok API (xAI)
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    // Use Groq API
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${XAI_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-2-latest",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: isDistracted 
