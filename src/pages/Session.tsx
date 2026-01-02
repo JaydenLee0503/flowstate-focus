@@ -4,6 +4,8 @@ import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { usePostureDetection } from '@/hooks/usePostureDetection';
+import { useNudgeGenerator } from '@/hooks/useNudgeGenerator';
+import { AIChatbot } from '@/components/AIChatbot';
 
 const goalLabels: Record<string, string> = {
   reading: 'Reading / Review',
@@ -29,6 +31,13 @@ const Session = () => {
     stopCamera 
   } = usePostureDetection();
 
+  // LLM-powered nudge generation (triggers on distraction state change)
+  const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
+    isDistracted,
+    studyGoal,
+    energyLevel
+  });
+
   // Ref for video container to attach the video element
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
@@ -45,11 +54,6 @@ const Session = () => {
       videoContainerRef.current.appendChild(video);
     }
   }, [isUsingCamera, videoRef]);
-  
-  // Generate AI suggestion based on posture/attention signals
-  const aiSuggestion = isDistracted
-    ? "You might be slouching a bit—try a gentle posture reset."
-    : "Nice work. Stay relaxed and upright.";
 
   // Redirect if no session data
   useEffect(() => {
@@ -137,9 +141,9 @@ const Session = () => {
             </div>
           </div>
 
-          {/* AI Nudge */}
+          {/* AI Nudge - LLM-generated supportive messages */}
           <div className="max-w-sm mx-auto px-6 py-5 bg-card rounded-2xl border border-border shadow-medium">
-            <p className="text-sm text-muted-foreground text-center leading-relaxed">
+            <p className={`text-sm text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
               "{aiSuggestion}"
             </p>
             <div className="mt-3 flex items-center justify-center gap-2">
@@ -252,6 +256,9 @@ const Session = () => {
           </div>
         </Dialog>
       </Transition>
+
+      {/* Floating AI Chatbot */}
+      <AIChatbot />
     </main>
   );
 };
