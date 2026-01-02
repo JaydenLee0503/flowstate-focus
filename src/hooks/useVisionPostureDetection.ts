@@ -16,7 +16,7 @@ interface PostureState {
 
 const ANALYSIS_INTERVAL = 3000; // Analyze every 3 seconds to avoid rate limits
 
-export function useVisionPostureDetection() {
+export function useVisionPostureDetection(analysisMode: 'environment' | 'posture' = 'posture') {
   const [state, setState] = useState<PostureState>({
     postureScore: 0.8,
     isDistracted: false,
@@ -87,7 +87,7 @@ export function useVisionPostureDetection() {
     
     try {
       const { data, error } = await supabase.functions.invoke('analyze-posture', {
-        body: { imageBase64 }
+        body: { imageBase64, analysisMode }
       });
 
       if (error) {
@@ -110,7 +110,7 @@ export function useVisionPostureDetection() {
     } catch (err) {
       console.error('Failed to analyze posture:', err);
     }
-  }, [captureFrame]);
+  }, [captureFrame, analysisMode]);
 
   const startCamera = useCallback(async () => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));

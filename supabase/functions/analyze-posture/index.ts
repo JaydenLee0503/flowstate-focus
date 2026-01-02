@@ -20,7 +20,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64 } = await req.json();
+    const { imageBase64, analysisMode = 'posture' } = await req.json();
     
     if (!imageBase64) {
       return new Response(
@@ -45,6 +45,73 @@ serve(async (req) => {
       );
     }
 
+    // Different prompts based on analysis mode
+    const posturePrompt = `You are an expert ergonomics analyzer. Focus on the PERSON'S POSTURE.
+
+## POSTURE SCORING (0.0 to 1.0)
+**Excellent (0.9-1.0):** Head aligned over shoulders, shoulders relaxed and level, back straight, good spinal alignment
+**Good (0.7-0.8):** Slight forward head, minor shoulder tension, generally upright
+**Fair (0.5-0.6):** Noticeable forward lean, rounded shoulders, visible slouching
+**Poor (0.3-0.4):** Significant slouching, head far forward, collapsed posture
+**Very Poor (0.0-0.2):** Lying down, head on desk, completely disengaged
+
+## LOOKING DOWN
+- Head tilted more than 30 degrees downward = lookingDown=true
+
+## DISTRACTION (isDistracted=true if ANY):
+- Looking away from screen
+- Eyes closed or drowsy
+- Turned away from workspace
+
+## PHONE CHECK
+Quick scan: Is the person holding or using a phone?
+
+Respond with ONLY valid JSON (no markdown):
+{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":[],"brief":"Encouraging 5-10 word posture message"}`;
+
+    const environmentPrompt = `You are an expert study environment analyzer. Focus on the DESK and WORKSPACE.
+
+## DESK/WORKSPACE ANALYSIS (Primary Focus)
+Carefully examine the entire visible workspace:
+
+**Cluttered (deskCluttered=true):**
+- Multiple unrelated items scattered around
+- Food/drinks (except water bottle)
+- Gaming devices, controllers, toys
+- Multiple phones or tablets visible
+- Excessive papers/books piled messily
+- Non-study items visible
+- Trash or wrappers
+
+**Clean (deskCluttered=false):**
+- Organized study materials only
+- Single water bottle is OK
+- Laptop/monitor and keyboard
+- Notebooks/textbooks neatly arranged
+- Minimal distractions, focused setup
+
+**Distracting Items:** List specific items you see that could distract (phones, toys, food, games, etc.)
+
+## PHONE DETECTION (Important)
+Scan the ENTIRE desk surface and visible area:
+- Phone on desk/table
+- Phone in hands
+- Phone on lap or chair
+- Multiple devices
+
+## POSTURE (Secondary - just quick check)
+Quick assessment: Is the person slouching badly? Score roughly.
+
+Respond with ONLY valid JSON (no markdown):
+{"postureScore":0.7,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":["list","items","here"],"brief":"Encouraging 5-10 word workspace message"}`;
+
+    const systemPrompt = analysisMode === 'environment' ? environmentPrompt : posturePrompt;
+    const userPrompt = analysisMode === 'environment' 
+      ? "Analyze this workspace/desk environment. Focus on desk clutter, distracting items, and phones visible. Return JSON only."
+      : "Analyze this person's posture and attention. Focus on sitting position and distraction. Return JSON only.";
+
+    console.log("Analysis mode:", analysisMode);
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -56,86 +123,14 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an expert ergonomics and study environment analyzer. Carefully examine webcam images to provide detailed assessments.
-
-## POSTURE SCORING (0.0 to 1.0)
-Analyze the person's sitting posture based on these criteria:
-
-**Excellent (0.9-1.0):**
-- Head aligned over shoulders, not jutting forward
-- Shoulders relaxed and level, not hunched
-- Back appears straight or naturally curved
-- Sitting upright with good spinal alignment
-
-**Good (0.7-0.8):**
-- Slight forward head position
-- Minor shoulder tension or slight hunch
-- Generally upright but not perfect
-
-**Fair (0.5-0.6):**
-- Noticeable forward head lean
-- Rounded shoulders
-- Visible slouching
-- Leaning to one side
-
-**Poor (0.3-0.4):**
-- Significant slouching or hunching
-- Head far forward from shoulders
-- Collapsed chest posture
-- Very rounded upper back
-
-**Very Poor (0.0-0.2):**
-- Lying down or extremely slumped
-- Head resting on hand/desk
-- Completely disengaged posture
-
-## PHONE DETECTION
-Scan the ENTIRE image for phones/smartphones:
-- In hands (holding, texting, scrolling)
-- On desk/table surface
-- On lap or nearby
-- Screen visible or phone shape visible
-- Even partially visible phones count
-
-## DESK/ENVIRONMENT ANALYSIS
-If desk surface is visible, check for:
-
-**Clutter indicators (deskCluttered=true):**
-- Multiple unrelated items scattered
-- Food/drinks (not water)
-- Gaming devices or controllers
-- Multiple phones or tablets
-- Toys or non-study items
-- Excessive papers/books piled messily
-
-**Clean desk (deskCluttered=false):**
-- Organized study materials only
-- Single water bottle is OK
-- Laptop/monitor and keyboard
-- Notebooks/textbooks neatly arranged
-- Minimal items, focused setup
-
-## LOOKING DOWN DETECTION
-- Head tilted more than 30 degrees downward = lookingDown=true
-- Looking at desk, lap, or below screen level
-- Note: Looking down at notes is normal, combine with desk analysis
-
-## DISTRACTION DETECTION (isDistracted=true if ANY):
-- Looking away from screen/study area
-- Using phone or holding phone
-- Eyes closed or appearing drowsy
-- Engaged with non-study items
-- Turned away from workspace
-
-Respond with ONLY valid JSON (no markdown, no backticks):
-{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":[],"brief":"Encouraging 5-10 word message"}`
+            content: systemPrompt
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Analyze this study session image. Evaluate posture precisely using the scoring criteria. Check thoroughly for phones and desk clutter. Return JSON only, no markdown."
+                text: userPrompt
               },
               {
                 type: "image_url",
