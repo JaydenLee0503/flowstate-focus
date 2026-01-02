@@ -44,30 +44,22 @@ const Session = () => {
 
   // Attach video element to container when camera is active
   useEffect(() => {
-    if (isUsingCamera && videoRef.current && videoContainerRef.current) {
-      // Create new video element if needed
-      let video = videoContainerRef.current.querySelector('video');
-      if (!video) {
-        video = document.createElement('video');
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = true;
-        videoContainerRef.current.appendChild(video);
-      }
-      
-      // Copy srcObject from hook's videoRef
-      if (videoRef.current.srcObject) {
-        video.srcObject = videoRef.current.srcObject;
-      }
+    const container = videoContainerRef.current;
+    const video = videoRef.current;
+    
+    if (isUsingCamera && video && container) {
+      // Clear container and append the hook's video element directly
+      container.innerHTML = '';
       
       video.style.width = '100%';
       video.style.height = '100%';
       video.style.objectFit = 'cover';
       video.style.borderRadius = '0.75rem';
       video.style.transform = 'scaleX(-1)'; // Mirror the video
+      
+      container.appendChild(video);
     }
   }, [isUsingCamera, videoRef]);
-
   // Redirect if no session data
   useEffect(() => {
     if (!studyGoal || !energyLevel) {
