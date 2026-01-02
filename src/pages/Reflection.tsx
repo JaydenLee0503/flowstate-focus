@@ -1,6 +1,5 @@
 import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import { useSession } from '@/context/SessionContext';
 
 const Reflection = () => {
@@ -43,24 +42,24 @@ const Reflection = () => {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground mb-2">
             Session Reflection
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-[15px]">
             You studied for {formatDuration(sessionDuration)}
           </p>
         </header>
 
         {/* Summary Card */}
         {/* TODO: Replace with actual AI-generated insights based on session data */}
-        <section className="bg-card border border-border rounded-2xl p-6 mb-8 shadow-soft">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
+        <section className="bg-card border border-border rounded-xl p-5 mb-6 shadow-soft">
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2.5">
             Session Insight
           </h2>
-          <p className="text-foreground leading-relaxed">
+          <p className="text-foreground text-[15px] leading-relaxed">
             You stayed focused best when your posture was upright. Consider maintaining that awareness in future sessions.
           </p>
         </section>
 
         {/* Reflection Prompt */}
-        <section className="bg-accent/50 border border-border rounded-2xl p-6 mb-10">
+        <section className="bg-accent/60 border border-border rounded-xl p-5 mb-10">
           <p className="text-sm text-muted-foreground text-center leading-relaxed">
             Would you like to try a short movement break before your next session?
           </p>
@@ -68,22 +67,18 @@ const Reflection = () => {
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-3">
-          <Button
-            variant="flow"
-            size="lg"
-            className="w-full"
+          <button
             onClick={handleStartAnother}
+            className="w-full py-3.5 px-6 rounded-lg text-base font-medium text-primary-foreground bg-primary shadow-medium hover:bg-primary/90 active:scale-[0.98] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
           >
             Start Another Session
-          </Button>
-          <Button
-            variant="ghost"
-            size="lg"
-            className="w-full text-muted-foreground"
+          </button>
+          <button
             onClick={handleExit}
+            className="w-full py-3 px-6 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
           >
             Exit
-          </Button>
+          </button>
         </div>
       </div>
     </main>
