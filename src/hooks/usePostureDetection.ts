@@ -157,14 +157,12 @@ export function usePostureDetection() {
 
       streamRef.current = stream;
 
-      // Create hidden video element
+      // Create video element (will be attached to DOM by consumer if needed)
       const video = document.createElement("video");
       video.srcObject = stream;
       video.autoplay = true;
       video.playsInline = true;
       video.muted = true;
-      video.style.display = "none"; // Hidden - no UI display
-      document.body.appendChild(video);
       videoRef.current = video;
 
       await video.play();
@@ -278,6 +276,7 @@ export function usePostureDetection() {
     isCameraAvailable: state.isCameraAvailable,
     isLoading: state.isLoading,
     error: state.error,
+    videoRef,
     startCamera,
     stopCamera,
   };

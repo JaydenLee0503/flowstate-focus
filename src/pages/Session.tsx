@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
@@ -24,9 +24,27 @@ const Session = () => {
     isDistracted, 
     isUsingCamera, 
     isLoading: isCameraLoading,
+    videoRef,
     startCamera, 
     stopCamera 
   } = usePostureDetection();
+
+  // Ref for video container to attach the video element
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+
+  // Attach video element to container when camera is active
+  useEffect(() => {
+    if (isUsingCamera && videoRef.current && videoContainerRef.current) {
+      const video = videoRef.current;
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.objectFit = 'cover';
+      video.style.borderRadius = '0.75rem';
+      video.style.transform = 'scaleX(-1)'; // Mirror the video
+      videoContainerRef.current.innerHTML = '';
+      videoContainerRef.current.appendChild(video);
+    }
+  }, [isUsingCamera, videoRef]);
   
   // Generate AI suggestion based on posture/attention signals
   const aiSuggestion = isDistracted
@@ -134,19 +152,32 @@ const Session = () => {
               </div>
             </div>
             
-            {/* Camera Toggle - Optional posture tracking */}
+            {/* Camera Preview & Toggle */}
             <div className="mt-4 pt-3 border-t border-border">
+              {isUsingCamera && (
+                <div className="mb-3">
+                  <div 
+                    ref={videoContainerRef}
+                    className="w-full aspect-video bg-muted rounded-xl overflow-hidden border border-border"
+                  />
+                </div>
+              )}
+              
               <button
                 onClick={() => isUsingCamera ? stopCamera() : startCamera()}
                 disabled={isCameraLoading}
-                className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 flex items-center justify-center gap-2"
+                className={`w-full text-xs transition-colors duration-150 flex items-center justify-center gap-2 py-2 rounded-lg ${
+                  isUsingCamera 
+                    ? 'text-destructive hover:bg-destructive/10' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
               >
                 {isCameraLoading ? (
                   <span>Starting camera...</span>
                 ) : isUsingCamera ? (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-flow-high animate-pulse" />
-                    <span>Posture tracking active · Click to disable</span>
+                    <span className="w-2 h-2 rounded-full bg-destructive" />
+                    <span>Disable Camera</span>
                   </>
                 ) : (
                   <span>Enable camera for real posture tracking</span>
