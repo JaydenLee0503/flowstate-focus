@@ -22,16 +22,29 @@ export function useVisionPostureDetection() {
     error: null,
   });
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(document.createElement('video'));
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize video element properties
+  useEffect(() => {
+    const video = videoRef.current;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = true;
+  }, []);
 
   const captureFrame = useCallback((): string | null => {
     const video = videoRef.current;
     let canvas = canvasRef.current;
     
     if (!video || !video.videoWidth || !video.videoHeight) {
+      console.log('Video not ready for capture:', { 
+        hasVideo: !!video, 
+        width: video?.videoWidth, 
+        height: video?.videoHeight 
+      });
       return null;
     }
 
@@ -57,8 +70,13 @@ export function useVisionPostureDetection() {
 
   const analyzePosture = useCallback(async () => {
     const imageBase64 = captureFrame();
-    if (!imageBase64) return;
+    if (!imageBase64) {
+      console.log('No frame captured, skipping analysis');
+      return;
+    }
 
+    console.log('Sending frame for analysis...');
+    
     try {
       const { data, error } = await supabase.functions.invoke('analyze-posture', {
         body: { imageBase64 }
@@ -68,6 +86,8 @@ export function useVisionPostureDetection() {
         console.error('Posture analysis error:', error);
         return;
       }
+
+      console.log('Posture analysis result:', data);
 
       setState(prev => ({
         ...prev,
@@ -84,16 +104,30 @@ export function useVisionPostureDetection() {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
+      console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: 'user' }
       });
 
+      console.log('Camera access granted, stream:', stream.id);
       streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      const video = videoRef.current;
+      video.srcObject = stream;
+      
+      // Wait for video to be ready
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          console.log('Video metadata loaded:', video.videoWidth, 'x', video.videoHeight);
+          video.play()
+            .then(() => {
+              console.log('Video playing');
+              resolve();
+            })
+            .catch(reject);
+        };
+        video.onerror = () => reject(new Error('Video element error'));
+      });
 
       setState(prev => ({ ...prev, isCameraOn: true, isLoading: false }));
 
@@ -101,7 +135,7 @@ export function useVisionPostureDetection() {
       intervalRef.current = setInterval(analyzePosture, ANALYSIS_INTERVAL);
       
       // Run first analysis after video is ready
-      setTimeout(analyzePosture, 1000);
+      setTimeout(analyzePosture, 1500);
 
     } catch (err) {
       console.error('Camera access error:', err);
@@ -114,6 +148,8 @@ export function useVisionPostureDetection() {
   }, [analyzePosture]);
 
   const stopCamera = useCallback(() => {
+    console.log('Stopping camera...');
+    
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
