@@ -52,41 +52,32 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           {
             role: "system",
-            content: `You are a study environment analyzer for a focus app. Analyze the webcam image and assess:
+            content: `You are a study environment analyzer. Analyze webcam images to detect:
 
-1. POSTURE: Is the person sitting upright, slouching, or leaning?
-2. ATTENTION: Are they looking at the screen, looking away, or looking down at their desk?
-3. PHONE DETECTION: Is there a phone/smartphone visible in the frame? (in hand, on desk, anywhere visible)
-4. DESK ANALYSIS: If the camera shows a desk/table surface (user looking down), are there distracting items visible? (phones, unrelated items, clutter)
-5. LOOKING DOWN: Is the user's head tilted down significantly, suggesting they're looking at their desk/table?
+1. POSTURE (0-1 score): 1.0 = sitting upright, 0.5 = slight slouch, 0.0 = very poor posture
+2. PHONE DETECTION: Look carefully for smartphones/mobile phones anywhere in the image - in hands, on desk, on lap, or visible in frame. This is CRITICAL to detect.
+3. LOOKING DOWN: Is the person's head tilted down significantly (looking at desk/lap)?
+4. DESK CLUTTER: If desk is visible, are there distracting items? (phones, games, unrelated objects)
+5. DISTRACTION: Is the person looking away from screen, using phone, or appears unfocused?
 
-IMPORTANT GUIDELINES:
-- Be encouraging and non-judgmental in the "brief" message
-- If a phone is detected, gently mention it
-- If looking at a cluttered desk, kindly suggest tidying up
-- Focus on the most important observation
+DETECTION PRIORITY:
+- If you see ANY phone/smartphone, set phoneDetected=true immediately
+- A phone in hand = isDistracted=true AND phoneDetected=true
+- Looking at phone = postureScore drops to 0.3-0.4
 
-Respond ONLY with valid JSON in this exact format:
-{
-  "postureScore": <number 0-1, where 1 is excellent posture>,
-  "isDistracted": <boolean, true if looking away, at phone, or unfocused>,
-  "phoneDetected": <boolean, true if a phone/smartphone is visible anywhere>,
-  "lookingDown": <boolean, true if user is looking down at desk/table>,
-  "deskCluttered": <boolean, true if desk has distracting items visible>,
-  "distractingItems": <array of strings listing distracting items seen, e.g. ["phone", "game controller"]>,
-  "brief": "<one short encouraging observation, max 15 words>"
-}`
+Respond with ONLY this JSON format (no markdown):
+{"postureScore":0.8,"isDistracted":false,"phoneDetected":false,"lookingDown":false,"deskCluttered":false,"distractingItems":[],"brief":"Short encouraging message"}`
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: "Analyze this webcam frame for posture, attention, phone detection, and desk environment. Respond with JSON only."
+                text: "Analyze this image. Check carefully for phones. Return JSON only."
               },
               {
                 type: "image_url",
