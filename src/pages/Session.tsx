@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
-import { useVisionPostureDetection } from '@/hooks/useVisionPostureDetection';
+import { usePostureDetection } from '@/hooks/usePostureDetection';
 import { useNudgeGenerator } from '@/hooks/useNudgeGenerator';
 import { AIChatbot } from '@/components/AIChatbot';
 
@@ -19,23 +19,17 @@ const Session = () => {
   const [seconds, setSeconds] = useState(0);
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
-  const [analysisMode, setAnalysisMode] = useState<'environment' | 'posture'>('posture');
   
-  // AI Vision-powered attention/posture detection (Gemini)
+  // MediaPipe-powered posture detection (local, no API calls)
   const { 
     postureScore, 
     isDistracted,
-    phoneDetected,
-    lookingDown,
-    deskCluttered,
-    distractingItems,
-    analysis,
-    isCameraOn: isUsingCamera, 
+    isUsingCamera, 
     isLoading: isCameraLoading,
     videoRef,
     startCamera, 
     stopCamera 
-  } = useVisionPostureDetection(analysisMode);
+  } = usePostureDetection();
 
   // LLM-powered nudge generation (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
@@ -157,38 +151,6 @@ const Session = () => {
               "{aiSuggestion}"
             </p>
             
-            {/* Vision Analysis Feedback */}
-            {isUsingCamera && analysis && (
-              <p className="mt-3 text-sm text-center text-foreground/80 font-medium">
-                {analysis}
-              </p>
-            )}
-            
-            {/* Detection Alerts */}
-            {isUsingCamera && (phoneDetected || deskCluttered) && (
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {phoneDetected && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive text-xs font-medium rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                    Phone detected
-                  </span>
-                )}
-                {deskCluttered && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-600 text-xs font-medium rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Desk needs tidying
-                  </span>
-                )}
-              </div>
-            )}
-            
-            {/* Distracting Items List */}
-            {isUsingCamera && distractingItems && distractingItems.length > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground text-center">
-                Spotted: {distractingItems.join(', ')}
-              </p>
-            )}
-            
             <div className="mt-4 flex items-center justify-center gap-3">
               <div className="text-sm text-muted-foreground">Focus:</div>
               <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
@@ -209,30 +171,6 @@ const Session = () => {
                   />
                 </div>
               )}
-              
-              {/* Analysis Mode Selector */}
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setAnalysisMode('posture')}
-                  className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all duration-150 ${
-                    analysisMode === 'posture'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Analyze Posture
-                </button>
-                <button
-                  onClick={() => setAnalysisMode('environment')}
-                  className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all duration-150 ${
-                    analysisMode === 'environment'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Analyze Environment
-                </button>
-              </div>
               
               <button
                 onClick={() => isUsingCamera ? stopCamera() : startCamera()}
