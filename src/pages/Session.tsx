@@ -4,6 +4,7 @@ import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { usePostureDetection } from '@/hooks/usePostureDetection';
+import { useYoloDetection } from '@/hooks/useYoloDetection';
 import { useNudgeGenerator } from '@/hooks/useNudgeGenerator';
 import { AIChatbot } from '@/components/AIChatbot';
 
@@ -30,6 +31,14 @@ const Session = () => {
     startCamera, 
     stopCamera 
   } = usePostureDetection();
+
+  // YOLO-powered object detection (phones, distracting items)
+  const {
+    phoneDetected,
+    deskCluttered,
+    distractingItems,
+    isModelLoading: isYoloLoading,
+  } = useYoloDetection(videoRef, isUsingCamera);
 
   // LLM-powered nudge generation (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
@@ -150,6 +159,38 @@ const Session = () => {
             <p className={`text-base text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
               "{aiSuggestion}"
             </p>
+            
+            {/* YOLO Detection Alerts */}
+            {isUsingCamera && (phoneDetected || deskCluttered) && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {phoneDetected && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive text-xs font-medium rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                    Phone detected
+                  </span>
+                )}
+                {deskCluttered && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-600 text-xs font-medium rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Desk needs tidying
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* Distracting Items List */}
+            {isUsingCamera && distractingItems && distractingItems.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground text-center">
+                Spotted: {distractingItems.join(', ')}
+              </p>
+            )}
+            
+            {/* YOLO Loading Indicator */}
+            {isUsingCamera && isYoloLoading && (
+              <p className="mt-2 text-xs text-muted-foreground text-center animate-pulse">
+                Loading object detection...
+              </p>
+            )}
             
             <div className="mt-4 flex items-center justify-center gap-3">
               <div className="text-sm text-muted-foreground">Focus:</div>
