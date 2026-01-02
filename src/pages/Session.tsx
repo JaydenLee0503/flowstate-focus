@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
-import { useSimulatedAttention } from '@/hooks/useSimulatedAttention';
+import { usePostureDetection } from '@/hooks/usePostureDetection';
 
 const goalLabels: Record<string, string> = {
   reading: 'Reading / Review',
@@ -18,8 +18,15 @@ const Session = () => {
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
   
-  // AI-powered attention/posture detection
-  const { postureScore, isDistracted } = useSimulatedAttention();
+  // AI-powered attention/posture detection (MediaPipe with fallback)
+  const { 
+    postureScore, 
+    isDistracted, 
+    isUsingCamera, 
+    isLoading: isCameraLoading,
+    startCamera, 
+    stopCamera 
+  } = usePostureDetection();
   
   // Generate AI suggestion based on posture/attention signals
   const aiSuggestion = isDistracted
@@ -125,6 +132,26 @@ const Session = () => {
                   style={{ width: `${postureScore * 100}%` }}
                 />
               </div>
+            </div>
+            
+            {/* Camera Toggle - Optional posture tracking */}
+            <div className="mt-4 pt-3 border-t border-border">
+              <button
+                onClick={() => isUsingCamera ? stopCamera() : startCamera()}
+                disabled={isCameraLoading}
+                className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 flex items-center justify-center gap-2"
+              >
+                {isCameraLoading ? (
+                  <span>Starting camera...</span>
+                ) : isUsingCamera ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-flow-high animate-pulse" />
+                    <span>Posture tracking active · Click to disable</span>
+                  </>
+                ) : (
+                  <span>Enable camera for real posture tracking</span>
+                )}
+              </button>
             </div>
           </div>
         </div>
