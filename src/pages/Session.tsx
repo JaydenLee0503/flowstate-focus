@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
-import { usePostureDetection } from '@/hooks/usePostureDetection';
+import { useVisionPostureDetection } from '@/hooks/useVisionPostureDetection';
 import { useNudgeGenerator } from '@/hooks/useNudgeGenerator';
 import { AIChatbot } from '@/components/AIChatbot';
 
@@ -20,16 +20,17 @@ const Session = () => {
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
   
-  // AI-powered attention/posture detection (MediaPipe with fallback)
+  // AI Vision-powered attention/posture detection (Gemini)
   const { 
     postureScore, 
-    isDistracted, 
-    isUsingCamera, 
+    isDistracted,
+    analysis,
+    isCameraOn: isUsingCamera, 
     isLoading: isCameraLoading,
     videoRef,
     startCamera, 
     stopCamera 
-  } = usePostureDetection();
+  } = useVisionPostureDetection();
 
   // LLM-powered nudge generation (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
@@ -44,14 +45,26 @@ const Session = () => {
   // Attach video element to container when camera is active
   useEffect(() => {
     if (isUsingCamera && videoRef.current && videoContainerRef.current) {
-      const video = videoRef.current;
+      // Create new video element if needed
+      let video = videoContainerRef.current.querySelector('video');
+      if (!video) {
+        video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        videoContainerRef.current.appendChild(video);
+      }
+      
+      // Copy srcObject from hook's videoRef
+      if (videoRef.current.srcObject) {
+        video.srcObject = videoRef.current.srcObject;
+      }
+      
       video.style.width = '100%';
       video.style.height = '100%';
       video.style.objectFit = 'cover';
       video.style.borderRadius = '0.75rem';
       video.style.transform = 'scaleX(-1)'; // Mirror the video
-      videoContainerRef.current.innerHTML = '';
-      videoContainerRef.current.appendChild(video);
     }
   }, [isUsingCamera, videoRef]);
 
