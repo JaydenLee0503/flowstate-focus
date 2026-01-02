@@ -4,6 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 interface PostureState {
   postureScore: number;
   isDistracted: boolean;
+  phoneDetected: boolean;
+  lookingDown: boolean;
+  deskCluttered: boolean;
+  distractingItems: string[];
   analysis: string;
   isCameraOn: boolean;
   isLoading: boolean;
@@ -16,6 +20,10 @@ export function useVisionPostureDetection() {
   const [state, setState] = useState<PostureState>({
     postureScore: 0.8,
     isDistracted: false,
+    phoneDetected: false,
+    lookingDown: false,
+    deskCluttered: false,
+    distractingItems: [],
     analysis: '',
     isCameraOn: false,
     isLoading: false,
@@ -93,6 +101,10 @@ export function useVisionPostureDetection() {
         ...prev,
         postureScore: data.postureScore ?? prev.postureScore,
         isDistracted: data.isDistracted ?? prev.isDistracted,
+        phoneDetected: data.phoneDetected ?? prev.phoneDetected,
+        lookingDown: data.lookingDown ?? prev.lookingDown,
+        deskCluttered: data.deskCluttered ?? prev.deskCluttered,
+        distractingItems: data.distractingItems ?? prev.distractingItems,
         analysis: data.analysis ?? prev.analysis,
       }));
     } catch (err) {
@@ -169,6 +181,10 @@ export function useVisionPostureDetection() {
       isCameraOn: false,
       postureScore: 0.8,
       isDistracted: false,
+      phoneDetected: false,
+      lookingDown: false,
+      deskCluttered: false,
+      distractingItems: [],
       analysis: '',
     }));
   }, []);

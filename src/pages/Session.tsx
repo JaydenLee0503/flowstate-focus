@@ -24,6 +24,10 @@ const Session = () => {
   const { 
     postureScore, 
     isDistracted,
+    phoneDetected,
+    lookingDown,
+    deskCluttered,
+    distractingItems,
     analysis,
     isCameraOn: isUsingCamera, 
     isLoading: isCameraLoading,
@@ -151,8 +155,41 @@ const Session = () => {
             <p className={`text-base text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
               "{aiSuggestion}"
             </p>
+            
+            {/* Vision Analysis Feedback */}
+            {isUsingCamera && analysis && (
+              <p className="mt-3 text-sm text-center text-foreground/80 font-medium">
+                {analysis}
+              </p>
+            )}
+            
+            {/* Detection Alerts */}
+            {isUsingCamera && (phoneDetected || deskCluttered) && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {phoneDetected && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive text-xs font-medium rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                    Phone detected
+                  </span>
+                )}
+                {deskCluttered && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-600 text-xs font-medium rounded-full">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Desk needs tidying
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {/* Distracting Items List */}
+            {isUsingCamera && distractingItems && distractingItems.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground text-center">
+                Spotted: {distractingItems.join(', ')}
+              </p>
+            )}
+            
             <div className="mt-4 flex items-center justify-center gap-3">
-              <div className="text-sm text-muted-foreground">Posture:</div>
+              <div className="text-sm text-muted-foreground">Focus:</div>
               <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
                 <div 
                   className={`h-full transition-all duration-500 rounded-full ${postureScore > 0.6 ? 'bg-flow-high' : postureScore > 0.3 ? 'bg-flow-medium' : 'bg-destructive'}`}
