@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
-import { useVisionPostureDetection } from '@/hooks/useVisionPostureDetection';
+import { usePostureDetection } from '@/hooks/usePostureDetection';
+import { useYoloDetection } from '@/hooks/useYoloDetection';
 import { useNudgeGenerator } from '@/hooks/useNudgeGenerator';
 import { AIChatbot } from '@/components/AIChatbot';
 
@@ -20,26 +21,50 @@ const Session = () => {
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
   
-  // Analysis mode: 'posture' focuses on user, 'environment' focuses on desk
-  const [analysisMode, setAnalysisMode] = useState<'posture' | 'environment'>('posture');
+  // Detection mode: 'posture' focuses on user, 'environment' focuses on desk
+  const [detectionMode, setDetectionMode] = useState<'posture' | 'environment'>('posture');
   
-  // Vision-powered detection (uses Gemini for accurate analysis)
+  // MediaPipe-powered posture detection (local, no API calls)
   const { 
-    postureScore,
-    isDistracted,
-    phoneDetected,
-    lookingDown,
-    deskCluttered,
-    distractingItems,
-    analysis,
-    isCameraOn,
+    postureScore: mediaPipeScore, 
+    isDistracted: mediaPipeDistracted,
+    isUsingCamera, 
     isLoading: isCameraLoading,
     videoRef,
     startCamera, 
     stopCamera 
-  } = useVisionPostureDetection(analysisMode);
+  } = usePostureDetection();
 
-  // LLM-powered nudge generation (triggers on distraction state change)
+  // YOLO-powered object detection (phones, distracting items)
+  const {
+    phoneDetected,
+    deskCluttered,
+    distractingItems,
+    isModelLoading: isYoloLoading,
+  } = useYoloDetection(videoRef, isUsingCamera);
+
+  // ---- COMBINED DISTRACTION LOGIC ----
+  // In posture mode: focus on head position
+  // In environment mode: focus on phone/clutter detection
+  const isDistracted = detectionMode === 'posture' 
+    ? mediaPipeDistracted || phoneDetected
+    : phoneDetected || deskCluttered || distractingItems.length > 2;
+  
+  // Combined posture score based on mode
+  let postureScore = mediaPipeScore;
+  if (detectionMode === 'environment') {
+    // Environment mode: score based on desk cleanliness
+    if (phoneDetected) postureScore = Math.min(postureScore, 0.3);
+    if (deskCluttered) postureScore = Math.min(postureScore, 0.4);
+    if (distractingItems.length > 0) {
+      postureScore = Math.max(0.2, postureScore - distractingItems.length * 0.15);
+    }
+  } else {
+    // Posture mode: phone still matters
+    if (phoneDetected) postureScore = Math.min(postureScore, 0.4);
+  }
+
+  // LLM-powered nudge generation via Groq (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
     isDistracted,
     studyGoal,
@@ -54,19 +79,16 @@ const Session = () => {
     const container = videoContainerRef.current;
     const video = videoRef.current;
     
-    if (isCameraOn && video && container) {
-      // Clear container and append the hook's video element directly
+    if (isUsingCamera && video && container) {
       container.innerHTML = '';
-      
       video.style.width = '100%';
       video.style.height = '100%';
       video.style.objectFit = 'cover';
       video.style.borderRadius = '0.75rem';
-      video.style.transform = 'scaleX(-1)'; // Mirror the video
-      
+      video.style.transform = 'scaleX(-1)';
       container.appendChild(video);
     }
-  }, [isCameraOn, videoRef]);
+  }, [isUsingCamera, videoRef]);
   // Redirect if no session data
   useEffect(() => {
     if (!studyGoal || !energyLevel) {
@@ -153,21 +175,14 @@ const Session = () => {
             </div>
           </div>
 
-          {/* AI Nudge - LLM-generated supportive messages */}
+          {/* AI Nudge - LLM-generated supportive messages via Groq */}
           <div className="max-w-md mx-auto px-8 py-7 bg-card rounded-2xl border border-border shadow-medium">
             <p className={`text-base text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
               "{aiSuggestion}"
             </p>
             
-            {/* Analysis feedback from Vision AI */}
-            {isCameraOn && analysis && (
-              <p className="mt-3 text-sm text-center text-foreground/80 italic">
-                {analysis}
-              </p>
-            )}
-            
             {/* Detection Alerts */}
-            {isCameraOn && (phoneDetected || deskCluttered || lookingDown) && (
+            {isUsingCamera && (phoneDetected || deskCluttered || isDistracted) && (
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {phoneDetected && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive text-xs font-medium rounded-full">
@@ -181,19 +196,26 @@ const Session = () => {
                     Desk needs tidying
                   </span>
                 )}
-                {lookingDown && !deskCluttered && (
+                {isDistracted && !phoneDetected && !deskCluttered && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 text-xs font-medium rounded-full">
                     <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    Looking down
+                    Posture check
                   </span>
                 )}
               </div>
             )}
             
             {/* Distracting Items List */}
-            {isCameraOn && distractingItems && distractingItems.length > 0 && (
+            {isUsingCamera && distractingItems && distractingItems.length > 0 && (
               <p className="mt-2 text-xs text-muted-foreground text-center">
                 Spotted: {distractingItems.join(', ')}
+              </p>
+            )}
+            
+            {/* YOLO Loading Indicator */}
+            {isUsingCamera && isYoloLoading && (
+              <p className="mt-2 text-xs text-muted-foreground text-center animate-pulse">
+                Loading object detection...
               </p>
             )}
             
@@ -209,14 +231,14 @@ const Session = () => {
             
             {/* Camera Preview & Controls */}
             <div className="mt-5 pt-4 border-t border-border">
-              {isCameraOn && (
+              {isUsingCamera && (
                 <>
                   {/* Mode Toggle */}
                   <div className="mb-4 flex justify-center gap-2">
                     <button
-                      onClick={() => setAnalysisMode('posture')}
+                      onClick={() => setDetectionMode('posture')}
                       className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                        analysisMode === 'posture'
+                        detectionMode === 'posture'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted text-muted-foreground hover:bg-secondary'
                       }`}
@@ -224,9 +246,9 @@ const Session = () => {
                       👤 Posture Mode
                     </button>
                     <button
-                      onClick={() => setAnalysisMode('environment')}
+                      onClick={() => setDetectionMode('environment')}
                       className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                        analysisMode === 'environment'
+                        detectionMode === 'environment'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted text-muted-foreground hover:bg-secondary'
                       }`}
@@ -246,17 +268,17 @@ const Session = () => {
               )}
               
               <button
-                onClick={() => isCameraOn ? stopCamera() : startCamera()}
+                onClick={() => isUsingCamera ? stopCamera() : startCamera()}
                 disabled={isCameraLoading}
                 className={`w-full text-sm transition-colors duration-150 flex items-center justify-center gap-2 py-3 rounded-lg ${
-                  isCameraOn 
+                  isUsingCamera 
                     ? 'text-destructive hover:bg-destructive/10' 
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {isCameraLoading ? (
                   <span>Starting camera...</span>
-                ) : isCameraOn ? (
+                ) : isUsingCamera ? (
                   <>
                     <span className="w-2.5 h-2.5 rounded-full bg-destructive" />
                     <span>Disable Camera</span>
