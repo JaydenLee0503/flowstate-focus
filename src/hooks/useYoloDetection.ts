@@ -86,29 +86,19 @@ export function useYoloDetection(
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       console.log("[YOLO] Loading object detection model...");
       
-      // Try WebGPU first, fall back to WASM
-      let detector: any;
-      try {
-        detector = await pipeline(
-          'object-detection',
-          'Xenova/detr-resnet-50',
-          { device: 'webgpu' }
-        );
-        console.log("[YOLO] Using WebGPU acceleration");
-      } catch (gpuError) {
-        console.log("[YOLO] WebGPU not available, falling back to WASM");
-        detector = await pipeline(
-          'object-detection',
-          'Xenova/detr-resnet-50'
-        );
-      }
+      // Use a lighter, faster model that works better in browser
+      const detector = await pipeline(
+        'object-detection',
+        'Xenova/yolos-tiny'
+      );
       
-      detectorRef.current = detector;
+      console.log("[YOLO] Model loaded successfully (yolos-tiny)");
+      
+      detectorRef.current = detector as ObjectDetectionPipeline;
       
       // Create canvas for frame capture
       canvasRef.current = document.createElement('canvas');
       
-      console.log("[YOLO] Model loaded successfully");
       setState(prev => ({ ...prev, isLoading: false, isModelLoaded: true }));
       isInitializingRef.current = false;
       return true;
