@@ -159,16 +159,29 @@ const Session = () => {
     return () => clearInterval(interval);
   }, [sessionComplete, isUnlimited]);
 
-  // Flow level based on elapsed time
+  // Flow level based on progress (for timed) or elapsed time (for unlimited)
   useEffect(() => {
-    if (elapsedSeconds >= 300) {
-      setFlowLevel('deep');
-    } else if (elapsedSeconds >= 120) {
-      setFlowLevel('flowing');
+    if (isUnlimited) {
+      // For unlimited, use time-based thresholds
+      if (elapsedSeconds >= 300) {
+        setFlowLevel('deep');
+      } else if (elapsedSeconds >= 120) {
+        setFlowLevel('flowing');
+      } else {
+        setFlowLevel('building');
+      }
     } else {
-      setFlowLevel('building');
+      // For timed sessions, use progress percentage
+      const progress = ((plannedDuration * 60 - secondsRemaining) / (plannedDuration * 60)) * 100;
+      if (progress >= 66) {
+        setFlowLevel('deep');
+      } else if (progress >= 33) {
+        setFlowLevel('flowing');
+      } else {
+        setFlowLevel('building');
+      }
     }
-  }, [elapsedSeconds]);
+  }, [elapsedSeconds, secondsRemaining, plannedDuration, isUnlimited]);
 
 
   const formatTime = useCallback((totalSeconds: number) => {
@@ -182,14 +195,16 @@ const Session = () => {
     navigate('/reflection');
   };
 
-  // Calculate progress percentage
+  // Calculate progress percentage for the bar
   const totalSeconds = plannedDuration * 60;
-  const progressPercent = Math.min(100, ((totalSeconds - secondsRemaining) / totalSeconds) * 100);
+  const progressPercent = isUnlimited 
+    ? Math.min(100, (elapsedSeconds / 3600) * 100) // For unlimited, fill over 1 hour
+    : Math.min(100, ((totalSeconds - secondsRemaining) / totalSeconds) * 100);
 
   const flowConfig = {
-    building: { label: 'Building Focus', color: 'bg-flow-low', barColor: 'from-flow-low to-flow-medium', width: '33%' },
-    flowing: { label: 'In Flow', color: 'bg-flow-medium', barColor: 'from-flow-medium to-flow-high', width: '66%' },
-    deep: { label: 'Deep Focus', color: 'bg-flow-high', barColor: 'from-flow-high to-primary', width: '100%' },
+    building: { label: 'Warming Up', color: 'bg-flow-low', barColor: 'from-flow-low to-flow-medium' },
+    flowing: { label: 'Warmed Up', color: 'bg-flow-medium', barColor: 'from-flow-medium to-flow-high' },
+    deep: { label: 'Lock In Mode', color: 'bg-flow-high', barColor: 'from-flow-high to-primary' },
   };
 
   if (!studyGoal) return null;
@@ -231,11 +246,11 @@ const Session = () => {
               </span>
             </div>
             
-            {/* Flow Bar */}
+            {/* Flow Bar - based on actual progress */}
             <div className="w-56 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
                 className={`h-full bg-gradient-to-r ${flowConfig[flowLevel].barColor} transition-all duration-1000 ease-out rounded-full`}
-                style={{ width: flowConfig[flowLevel].width }}
+                style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
