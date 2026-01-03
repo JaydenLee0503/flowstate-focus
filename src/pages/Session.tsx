@@ -28,6 +28,8 @@ const Session = () => {
   const [detectionMode, setDetectionMode] = useState<'posture' | 'environment'>('posture');
   
   // MediaPipe-powered posture detection (local, no API calls)
+  // Only processes when in posture mode to reduce CPU/memory load
+  const enablePostureProcessing = detectionMode === 'posture';
   const { 
     postureScore: mediaPipeScore, 
     isDistracted: mediaPipeDistracted,
@@ -40,7 +42,7 @@ const Session = () => {
     canvasRef,
     startCamera, 
     stopCamera 
-  } = usePostureDetection();
+  } = usePostureDetection(enablePostureProcessing);
 
   // YOLO-powered object detection (phones, distracting items)
   // ONLY runs in environment mode - mutually exclusive with posture detection

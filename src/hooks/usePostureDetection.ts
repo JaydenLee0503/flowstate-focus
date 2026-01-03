@@ -150,7 +150,9 @@ function tiltToPostureScore(tiltDegrees: number, maxDegrees: number): number {
 }
 
 // ---- Main Hook ----
-export function usePostureDetection() {
+// enableProcessing: when false, camera stays on but MediaPipe detection is skipped
+// This allows YOLO to use the video feed while reducing CPU/memory load
+export function usePostureDetection(enableProcessing: boolean = true) {
   const [state, setState] = useState<PostureState>({
     postureScore: 1,
     isDistracted: false,
@@ -161,6 +163,9 @@ export function usePostureDetection() {
     faceDetected: false,
     poseDetected: false,
   });
+  
+  const enableProcessingRef = useRef(enableProcessing);
+  enableProcessingRef.current = enableProcessing;
 
   const [metrics, setMetrics] = useState<PostureMetrics>({
     headTilt: 0,
@@ -338,6 +343,19 @@ export function usePostureDetection() {
     const drawingUtils = drawingUtilsRef.current;
 
     if (!video || video.readyState < 2) {
+      animationFrameRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+    
+    // If processing is disabled (environment mode), just draw video to canvas for YOLO
+    // Skip all MediaPipe detection to reduce CPU/memory load
+    if (!enableProcessingRef.current) {
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+      }
       animationFrameRef.current = requestAnimationFrame(processFrame);
       return;
     }
