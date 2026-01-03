@@ -388,39 +388,55 @@ export function usePostureDetection() {
             shoulderAlignment: shoulderTilt < 5 ? 'good' : shoulderTilt < 10 ? 'tilted' : 'hunched',
           }));
 
-          // Draw pose landmarks on canvas
+          // Draw only key landmarks on canvas (reduced for performance)
           if (canvas && drawingUtils) {
             const ctx = canvas.getContext("2d");
             if (ctx) {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               
-              // Draw pose connections
-              drawingUtils.drawConnectors(
-                poseLandmarks,
-                PoseLandmarker.POSE_CONNECTIONS,
-                { color: "#00FF00", lineWidth: 2 }
-              );
+              // Draw only upper body pose connections (shoulders, head)
+              // Key indices: 0=nose, 7=left_ear, 8=right_ear, 11=left_shoulder, 12=right_shoulder
+              const upperBodyIndices = [0, 7, 8, 11, 12];
+              const keyLandmarks = upperBodyIndices
+                .map(i => poseLandmarks[i])
+                .filter(l => l && (l.visibility ?? 0) > 0.5);
               
-              // Draw pose landmarks
-              drawingUtils.drawLandmarks(poseLandmarks, {
-                color: "#FF0000",
-                lineWidth: 1,
-                radius: 3,
+              // Draw key landmarks only
+              keyLandmarks.forEach(landmark => {
+                ctx.beginPath();
+                ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = "#00FF00";
+                ctx.fill();
               });
               
-              // Draw face landmarks if available
+              // Draw shoulder line
+              const leftShoulder = poseLandmarks[11];
+              const rightShoulder = poseLandmarks[12];
+              if (leftShoulder && rightShoulder && 
+                  (leftShoulder.visibility ?? 0) > 0.5 && 
+                  (rightShoulder.visibility ?? 0) > 0.5) {
+                ctx.beginPath();
+                ctx.moveTo(leftShoulder.x * canvas.width, leftShoulder.y * canvas.height);
+                ctx.lineTo(rightShoulder.x * canvas.width, rightShoulder.y * canvas.height);
+                ctx.strokeStyle = "#00FF00";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+              }
+              
+              // Draw only face oval (not tessellation - much lighter)
               if (faceDetected && faceResult.faceLandmarks[0]) {
-                drawingUtils.drawConnectors(
-                  faceResult.faceLandmarks[0],
-                  FaceLandmarker.FACE_LANDMARKS_TESSELATION,
-                  { color: "#C0C0C070", lineWidth: 1 }
-                );
-                drawingUtils.drawConnectors(
-                  faceResult.faceLandmarks[0],
-                  FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
-                  { color: "#E0E0E0", lineWidth: 2 }
-                );
+                // Just draw a few key face points: nose, eyes
+                const faceKeyIndices = [1, 33, 263, 10, 152]; // nose, left_eye, right_eye, forehead, chin
+                faceKeyIndices.forEach(i => {
+                  const landmark = faceResult.faceLandmarks[0][i];
+                  if (landmark) {
+                    ctx.beginPath();
+                    ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 4, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#FF6B6B";
+                    ctx.fill();
+                  }
+                });
               }
             }
           }
