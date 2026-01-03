@@ -350,14 +350,14 @@ export function usePostureDetection(enableProcessing: boolean = true) {
     const poseLandmarker = poseLandmarkerRef.current;
     const drawingUtils = drawingUtilsRef.current;
 
-    if (!video || video.readyState < 2) {
-      animationFrameRef.current = requestAnimationFrame(processFrame);
+    // If processing is disabled (environment mode), completely stop the loop.
+    // This ensures MediaPipe is truly OFF and we don't burn CPU while YOLO runs.
+    if (!enableProcessingRef.current) {
+      animationFrameRef.current = null;
       return;
     }
-    
-    // If processing is disabled (environment mode), skip ALL canvas drawing + MediaPipe work.
-    // The live preview can use the <video> element directly, and YOLO uses the video feed.
-    if (!enableProcessingRef.current) {
+
+    if (!video || video.readyState < 2) {
       animationFrameRef.current = requestAnimationFrame(processFrame);
       return;
     }

@@ -18,9 +18,9 @@ try {
   // ignore
 }
 
-// Detection configuration - reduced frequency & allocations to prevent crashes
-const DETECTION_INTERVAL_MS = 8000; // Check every 8 seconds
-const CONFIDENCE_THRESHOLD = 0.3; // Lower threshold for better detection
+// Detection configuration - tuned for responsiveness while staying stable
+const DETECTION_INTERVAL_MS = 1800; // ~1.8s (faster feedback than 8s)
+const CONFIDENCE_THRESHOLD = 0.25; // Slightly lower threshold to catch phones more reliably
 const MAX_RETRIES = 2; // Limit retries on failure
 
 // Downscale frames before inference to reduce memory/CPU
@@ -269,10 +269,36 @@ export function useYoloDetection(
   // Start/stop detection loop based on isActive
   useEffect(() => {
     if (!isActive) {
+      // Stop loop
       if (intervalRef.current) {
         clearTimeout(intervalRef.current);
         intervalRef.current = null;
       }
+
+      // Aggressively release model memory when leaving Environment mode.
+      // This prevents accumulated WASM/ORT allocations from crashing the tab over time.
+      try {
+        (detectorRef.current as any)?.dispose?.();
+      } catch {
+        // ignore
+      }
+      detectorRef.current = null;
+      canvasRef.current = null;
+      failureCountRef.current = 0;
+      isDetectingRef.current = false;
+      isInitializingRef.current = false;
+
+      setState(prev => ({
+        ...prev,
+        phoneDetected: false,
+        deskCluttered: false,
+        distractingItems: [],
+        allDetections: [],
+        isLoading: false,
+        isModelLoaded: false,
+        error: null,
+      }));
+
       return;
     }
 
@@ -302,6 +328,13 @@ export function useYoloDetection(
         clearTimeout(intervalRef.current);
         intervalRef.current = null;
       }
+      try {
+        (detectorRef.current as any)?.dispose?.();
+      } catch {
+        // ignore
+      }
+      detectorRef.current = null;
+      canvasRef.current = null;
     };
   }, []);
 
