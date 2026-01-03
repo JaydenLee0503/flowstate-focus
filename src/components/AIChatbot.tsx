@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { MessageCircle, X, Send } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 
@@ -16,7 +16,7 @@ interface Message {
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
-export function AIChatbot() {
+export const AIChatbot = forwardRef<HTMLDivElement>((_, ref) => {
   const { studyGoal, energyLevel } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -135,7 +135,7 @@ export function AIChatbot() {
   };
 
   return (
-    <>
+    <div ref={ref}>
       {/* Floating Chat Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -208,6 +208,8 @@ export function AIChatbot() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
-}
+});
+
+AIChatbot.displayName = 'AIChatbot';
