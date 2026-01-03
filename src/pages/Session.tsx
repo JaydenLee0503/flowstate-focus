@@ -37,6 +37,12 @@ const Session = () => {
     stopCamera 
   } = usePostureDetection(true); // Always enabled
 
+  // Ref to always have the latest posture score for the interval
+  const postureScoreRef = useRef(postureScore);
+  useEffect(() => {
+    postureScoreRef.current = postureScore;
+  }, [postureScore]);
+
   // Auto-start camera when session loads
   useEffect(() => {
     if (!cameraAutoStarted && studyGoal && energyLevel) {
@@ -48,16 +54,19 @@ const Session = () => {
     }
   }, [cameraAutoStarted, studyGoal, energyLevel, startCamera]);
 
-  // Track focus scores every 5 seconds when camera is active
+  // Track focus scores every 5 seconds when camera is active and session not complete
   useEffect(() => {
-    if (!isUsingCamera) return;
+    if (!isUsingCamera || sessionComplete) return;
+    
+    // Capture initial score immediately
+    addFocusScore(postureScoreRef.current);
     
     const interval = setInterval(() => {
-      addFocusScore(postureScore);
+      addFocusScore(postureScoreRef.current);
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [isUsingCamera, postureScore, addFocusScore]);
+  }, [isUsingCamera, sessionComplete, addFocusScore]);
 
   // LLM-powered nudge generation via Groq (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
