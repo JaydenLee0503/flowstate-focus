@@ -203,8 +203,8 @@ const Session = () => {
 
   const flowConfig = {
     building: { label: 'Warming Up', color: 'bg-flow-low', barColor: 'from-flow-low to-flow-medium' },
-    flowing: { label: 'Warmed Up', color: 'bg-flow-medium', barColor: 'from-flow-medium to-flow-high' },
-    deep: { label: 'Lock In Mode', color: 'bg-flow-high', barColor: 'from-flow-high to-primary' },
+    flowing: { label: 'Lock In Mode', color: 'bg-flow-medium', barColor: 'from-flow-medium to-flow-high' },
+    deep: { label: 'Final Sprint', color: 'bg-flow-high', barColor: 'from-flow-high to-primary' },
   };
 
   if (!studyGoal) return null;
