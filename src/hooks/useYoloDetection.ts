@@ -84,15 +84,24 @@ export function useYoloDetection(
     
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
-      console.log("[YOLO] Loading object detection model...");
+      console.log("[YOLO] Loading object detection model (yolos-tiny)...");
       
       // Use a lighter, faster model that works better in browser
+      // No WebGPU - use default WASM backend for reliability
       const detector = await pipeline(
         'object-detection',
-        'Xenova/yolos-tiny'
+        'Xenova/yolos-tiny',
+        { 
+          device: 'wasm',
+          progress_callback: (progress: { status: string; progress?: number }) => {
+            if (progress.status === 'progress' && progress.progress) {
+              console.log(`[YOLO] Loading: ${Math.round(progress.progress)}%`);
+            }
+          }
+        }
       );
       
-      console.log("[YOLO] Model loaded successfully (yolos-tiny)");
+      console.log("[YOLO] Model loaded successfully");
       
       detectorRef.current = detector as ObjectDetectionPipeline;
       
@@ -107,7 +116,7 @@ export function useYoloDetection(
       setState(prev => ({ 
         ...prev, 
         isLoading: false, 
-        error: "Failed to load detection model" 
+        error: `Failed to load detection model: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }));
       isInitializingRef.current = false;
       return false;
