@@ -147,8 +147,8 @@ export function useYoloDetection(
   }, []);
 
   // Capture a downscaled frame from the video.
-  // Return a compressed data URL because the object-detection pipeline expects an image input (url/base64).
-  const captureFrame = useCallback((): string | null => {
+  // IMPORTANT: return the canvas directly to avoid base64 allocations (toDataURL) that can crash browsers.
+  const captureFrame = useCallback((): HTMLCanvasElement | null => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -169,9 +169,7 @@ export function useYoloDetection(
     if (canvas.height !== height) canvas.height = height;
 
     ctx.drawImage(video, 0, 0, width, height);
-
-    // Lower quality reduces allocations significantly
-    return canvas.toDataURL('image/jpeg', 0.55);
+    return canvas;
   }, [videoRef]);
 
 
@@ -183,13 +181,13 @@ export function useYoloDetection(
     
     isDetectingRef.current = true;
     try {
-      const frameData = captureFrame();
-      if (!frameData) return;
+      const frameCanvas = captureFrame();
+      if (!frameCanvas) return;
 
-      const results = await detector(frameData, {
+      const results = await detector(frameCanvas, {
         threshold: CONFIDENCE_THRESHOLD,
       });
-      
+
       if (!Array.isArray(results)) return;
 
       failureCountRef.current = 0;

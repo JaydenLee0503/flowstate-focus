@@ -258,9 +258,15 @@ export function usePostureDetection(enableProcessing: boolean = true) {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      if (!faceLandmarkerRef.current || !poseLandmarkerRef.current) {
-        const success = await initializeMediaPipe();
-        if (!success) return false;
+      // In environment mode we keep the camera on but DO NOT initialize MediaPipe.
+      // This avoids loading GPU delegates + heavy models that can destabilize the browser.
+      if (enableProcessingRef.current) {
+        if (!faceLandmarkerRef.current || !poseLandmarkerRef.current) {
+          const success = await initializeMediaPipe();
+          if (!success) return false;
+        }
+      } else {
+        console.log("[PostureDetection] Processing disabled - skipping MediaPipe initialization");
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -304,23 +310,25 @@ export function usePostureDetection(enableProcessing: boolean = true) {
         isCameraAvailable: true 
       }));
 
-      // Start processing loop after a small delay to ensure video is ready
+      // Start processing loop after a small delay to ensure video is ready.
+      // IMPORTANT: Only start the per-frame loop when posture processing is enabled.
       setTimeout(() => {
-        if (videoRef.current && videoRef.current.readyState >= 2) {
-          processFrame();
-        } else {
-          // Wait for video to be ready
-          const checkReady = () => {
-            if (videoRef.current && videoRef.current.readyState >= 2) {
-              processFrame();
-            } else {
-              requestAnimationFrame(checkReady);
-            }
-          };
-          checkReady();
-        }
+        if (!enableProcessingRef.current) return;
+
+        const startIfReady = () => {
+          if (!enableProcessingRef.current) return;
+
+          if (videoRef.current && videoRef.current.readyState >= 2) {
+            processFrame();
+            return;
+          }
+
+          requestAnimationFrame(startIfReady);
+        };
+
+        startIfReady();
       }, 100);
-      
+
       return true;
     } catch (error) {
       console.error("[PostureDetection] Camera start failed:", error);
@@ -500,6 +508,69 @@ export function usePostureDetection(enableProcessing: boolean = true) {
 
     animationFrameRef.current = requestAnimationFrame(processFrame);
   }, []);
+
+  // ---- Mode switch behavior ----
+  // When processing is OFF (environment mode), fully tear down MediaPipe to avoid
+  // crashes from running two heavy vision systems at once.
+  useEffect(() => {
+    if (!enableProcessing) {
+      // Stop the per-frame loop entirely (video keeps playing without it).
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      // Release MediaPipe resources (GPU/wasm) if they were loaded.
+      try {
+        faceLandmarkerRef.current?.close();
+      } catch {
+        // ignore
+      }
+      faceLandmarkerRef.current = null;
+
+      try {
+        poseLandmarkerRef.current?.close();
+      } catch {
+        // ignore
+      }
+      poseLandmarkerRef.current = null;
+
+      drawingUtilsRef.current = null;
+
+      // Reset posture signals in environment mode.
+      setState(prev => ({
+        ...prev,
+        postureScore: 1,
+        isDistracted: false,
+        faceDetected: false,
+        poseDetected: false,
+      }));
+
+      return;
+    }
+
+    // When toggling back to posture mode while the camera is already running,
+    // (re)initialize MediaPipe and restart the processing loop.
+    if (
+      state.isUsingCamera &&
+      (!faceLandmarkerRef.current || !poseLandmarkerRef.current) &&
+      !isInitializingRef.current
+    ) {
+      (async () => {
+        const ok = await initializeMediaPipe();
+        if (ok) {
+          lastProcessTimeRef.current = 0;
+          processFrame();
+        }
+      })();
+      return;
+    }
+
+    if (state.isUsingCamera && !animationFrameRef.current) {
+      processFrame();
+    }
+  }, [enableProcessing, state.isUsingCamera, initializeMediaPipe, processFrame]);
+
 
   // ---- Stop Camera ----
   const stopCamera = useCallback(() => {
