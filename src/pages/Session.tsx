@@ -20,6 +20,7 @@ const Session = () => {
   const [seconds, setSeconds] = useState(0);
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
+  const [cameraAutoStarted, setCameraAutoStarted] = useState(false);
   
   // Detection mode: 'posture' focuses on user, 'environment' focuses on desk
   const [detectionMode, setDetectionMode] = useState<'posture' | 'environment'>('posture');
@@ -30,7 +31,11 @@ const Session = () => {
     isDistracted: mediaPipeDistracted,
     isUsingCamera, 
     isLoading: isCameraLoading,
+    faceDetected,
+    poseDetected,
+    metrics,
     videoRef,
+    canvasRef,
     startCamera, 
     stopCamera 
   } = usePostureDetection();
@@ -40,8 +45,22 @@ const Session = () => {
     phoneDetected,
     deskCluttered,
     distractingItems,
+    allDetections,
     isModelLoading: isYoloLoading,
+    isModelLoaded: isYoloLoaded,
   } = useYoloDetection(videoRef, isUsingCamera);
+
+  // Auto-start camera when session loads
+  useEffect(() => {
+    if (!cameraAutoStarted && studyGoal && energyLevel) {
+      setCameraAutoStarted(true);
+      // Small delay to ensure component is mounted
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [cameraAutoStarted, studyGoal, energyLevel, startCamera]);
 
   // ---- COMBINED DISTRACTION LOGIC ----
   // In posture mode: focus on head position
@@ -71,24 +90,33 @@ const Session = () => {
     energyLevel
   });
 
-  // Ref for video container to attach the video element
+  // Convert 0-1 score to 1-10 display score
+  const displayScore = Math.round(postureScore * 10);
+
+  // Ref for video container to attach the canvas element (shows landmarks)
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
-  // Attach video element to container when camera is active
+  // Attach canvas (with landmarks) to container when camera is active
   useEffect(() => {
     const container = videoContainerRef.current;
+    const canvas = canvasRef.current;
     const video = videoRef.current;
     
-    if (isUsingCamera && video && container) {
+    if (isUsingCamera && container) {
       container.innerHTML = '';
-      video.style.width = '100%';
-      video.style.height = '100%';
-      video.style.objectFit = 'cover';
-      video.style.borderRadius = '0.75rem';
-      video.style.transform = 'scaleX(-1)';
-      container.appendChild(video);
+      
+      // Use canvas if available (shows pose landmarks), otherwise use video
+      const displayElement = canvas || video;
+      if (displayElement) {
+        displayElement.style.width = '100%';
+        displayElement.style.height = '100%';
+        displayElement.style.objectFit = 'cover';
+        displayElement.style.borderRadius = '0.75rem';
+        displayElement.style.transform = 'scaleX(-1)';
+        container.appendChild(displayElement);
+      }
     }
-  }, [isUsingCamera, videoRef]);
+  }, [isUsingCamera, canvasRef, videoRef]);
   // Redirect if no session data
   useEffect(() => {
     if (!studyGoal || !energyLevel) {
@@ -227,7 +255,28 @@ const Session = () => {
                   style={{ width: `${postureScore * 100}%` }}
                 />
               </div>
+              <div className={`text-lg font-bold min-w-[2rem] text-center ${postureScore > 0.6 ? 'text-flow-high' : postureScore > 0.3 ? 'text-flow-medium' : 'text-destructive'}`}>
+                {displayScore}
+              </div>
             </div>
+            
+            {/* Detection Status */}
+            {isUsingCamera && (
+              <div className="mt-3 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                <span className={`flex items-center gap-1 ${faceDetected ? 'text-flow-high' : 'text-muted-foreground/50'}`}>
+                  <span className={`w-2 h-2 rounded-full ${faceDetected ? 'bg-flow-high' : 'bg-muted'}`} />
+                  Face
+                </span>
+                <span className={`flex items-center gap-1 ${poseDetected ? 'text-flow-high' : 'text-muted-foreground/50'}`}>
+                  <span className={`w-2 h-2 rounded-full ${poseDetected ? 'bg-flow-high' : 'bg-muted'}`} />
+                  Pose
+                </span>
+                <span className={`flex items-center gap-1 ${isYoloLoaded ? 'text-flow-high' : 'text-muted-foreground/50'}`}>
+                  <span className={`w-2 h-2 rounded-full ${isYoloLoaded ? 'bg-flow-high' : 'bg-muted'}`} />
+                  Objects
+                </span>
+              </div>
+            )}
             
             {/* Camera Preview & Controls */}
             <div className="mt-5 pt-4 border-t border-border">
