@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RadioGroup, Listbox, Transition } from '@headlessui/react';
 import { Check, ChevronDown, Sparkles } from 'lucide-react';
 import { useSession, StudyGoal, EnergyLevel } from '@/context/SessionContext';
 import { AIChatbot } from '@/components/AIChatbot';
+
 const studyGoals: { value: StudyGoal; label: string; description: string }[] = [
   { value: 'reading', label: 'Reading / Review', description: 'Absorbing and reviewing material' },
   { value: 'problem-solving', label: 'Problem Solving', description: 'Working through exercises' },
@@ -16,7 +17,7 @@ const energyLevels: { value: EnergyLevel; label: string }[] = [
   { value: 'high', label: 'High' },
 ];
 
-const Index = () => {
+const Index = forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
   const { setStudyGoal, setEnergyLevel } = useSession();
   const [selectedGoal, setSelectedGoal] = useState<StudyGoal>(null);
@@ -35,7 +36,7 @@ const Index = () => {
   const selectedGoalData = studyGoals.find(g => g.value === selectedGoal);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-background via-background to-accent/20 flex flex-col items-center justify-center px-6 py-12">
+    <main ref={ref} className="min-h-screen bg-gradient-to-b from-background via-background to-accent/20 flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-md stagger-children">
         {/* Header */}
         <header className="text-center mb-12">
@@ -160,6 +161,8 @@ const Index = () => {
       <AIChatbot />
     </main>
   );
-};
+});
+
+Index.displayName = 'Index';
 
 export default Index;
