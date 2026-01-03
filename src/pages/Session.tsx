@@ -43,8 +43,13 @@ const Session = () => {
   } = usePostureDetection();
 
   // YOLO-powered object detection (phones, distracting items)
-  // Only enabled in environment mode to reduce CPU/memory load
+  // ONLY runs in environment mode - mutually exclusive with posture detection
+  // This prevents both heavy ML systems from running simultaneously
   const enableYolo = detectionMode === 'environment' && isUsingCamera;
+  
+  // Note: MediaPipe (posture) runs when camera is on
+  // YOLO only runs when explicitly in environment mode
+  // This reduces memory/CPU load significantly
   const {
     phoneDetected,
     deskCluttered,
@@ -337,27 +342,35 @@ const Session = () => {
               {isUsingCamera && (
                 <>
                   {/* Mode Toggle */}
-                  <div className="mb-4 flex justify-center gap-2">
-                    <button
-                      onClick={() => setDetectionMode('posture')}
-                      className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                        detectionMode === 'posture'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground hover:bg-secondary'
-                      }`}
-                    >
-                      👤 Posture Mode
-                    </button>
-                    <button
-                      onClick={() => setDetectionMode('environment')}
-                      className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                        detectionMode === 'environment'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground hover:bg-secondary'
-                      }`}
-                    >
-                      🪑 Environment Mode
-                    </button>
+                  <div className="mb-4">
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => setDetectionMode('posture')}
+                        className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                          detectionMode === 'posture'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        👤 Posture Mode
+                      </button>
+                      <button
+                        onClick={() => setDetectionMode('environment')}
+                        disabled={isYoloLoading}
+                        className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                          detectionMode === 'environment'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-secondary'
+                        } ${isYoloLoading ? 'opacity-50 cursor-wait' : ''}`}
+                      >
+                        {isYoloLoading ? '⏳ Loading...' : '🔍 Environment Mode'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground text-center">
+                      {detectionMode === 'posture' 
+                        ? 'Tracking your posture & head position' 
+                        : 'Scanning for phones & distractions'}
+                    </p>
                   </div>
                   
                   {/* Video Preview */}
