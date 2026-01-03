@@ -8,10 +8,14 @@ import { pipeline, env } from "@huggingface/transformers";
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-// Detection configuration - reduced frequency to prevent crashes
-const DETECTION_INTERVAL_MS = 5000; // Check every 5 seconds (reduced from 2s)
+// Detection configuration - reduced frequency & allocations to prevent crashes
+const DETECTION_INTERVAL_MS = 8000; // Check every 8 seconds
 const CONFIDENCE_THRESHOLD = 0.3; // Lower threshold for better detection
 const MAX_RETRIES = 2; // Limit retries on failure
+
+// Downscale frames before inference to reduce memory/CPU
+const MAX_FRAME_WIDTH = 320;
+const MAX_FRAME_HEIGHT = 240;
 
 // Objects we consider distracting
 const DISTRACTING_OBJECTS = [
@@ -54,7 +58,7 @@ interface DetectionState {
 }
 
 type ObjectDetectionPipeline = (
-  image: string,
+  image: unknown,
   options?: { threshold?: number }
 ) => Promise<DetectionResult[]>;
 
@@ -132,23 +136,30 @@ export function useYoloDetection(
     }
   }, []);
 
-  // Capture frame from video
-  const captureFrame = useCallback((): string | null => {
+  // Capture a downscaled frame from the video.
+  // IMPORTANT: return the canvas directly (avoid base64 toDataURL allocations which can crash the browser)
+  const captureFrame = useCallback((): HTMLCanvasElement | null => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
+
     if (!video || !canvas || video.readyState < 2) return null;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
 
-    const width = Math.min(480, video.videoWidth || 480);
-    const height = Math.min(360, video.videoHeight || 360);
-    canvas.width = width;
-    canvas.height = height;
+    const vw = video.videoWidth || MAX_FRAME_WIDTH;
+    const vh = video.videoHeight || MAX_FRAME_HEIGHT;
+
+    const scale = Math.min(MAX_FRAME_WIDTH / vw, MAX_FRAME_HEIGHT / vh, 1);
+    const width = Math.max(1, Math.round(vw * scale));
+    const height = Math.max(1, Math.round(vh * scale));
+
+    // Only resize canvas when needed (resizing reallocates buffers)
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+
     ctx.drawImage(video, 0, 0, width, height);
-    
-    return canvas.toDataURL('image/jpeg', 0.7);
+    return canvas;
   }, [videoRef]);
 
 
@@ -156,13 +167,14 @@ export function useYoloDetection(
   const detectObjects = useCallback(async () => {
     const detector = detectorRef.current;
     if (!detector || !isActiveRef.current || isDetectingRef.current) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     
     isDetectingRef.current = true;
     try {
-      const frameData = captureFrame();
-      if (!frameData) return;
-      
-      const results = await detector(frameData, {
+      const frameCanvas = captureFrame();
+      if (!frameCanvas) return;
+
+      const results = await detector(frameCanvas, {
         threshold: CONFIDENCE_THRESHOLD,
       });
       
@@ -276,8 +288,9 @@ export function useYoloDetection(
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearTimeout(intervalRef.current = null);
+      if (intervalRef.current !== null) {
+        clearTimeout(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, []);
