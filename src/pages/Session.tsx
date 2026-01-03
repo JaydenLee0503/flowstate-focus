@@ -4,7 +4,6 @@ import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { usePostureDetection } from '@/hooks/usePostureDetection';
-import { useYoloDetection } from '@/hooks/useYoloDetection';
 import { useNudgeGenerator } from '@/hooks/useNudgeGenerator';
 import { AIChatbot } from '@/components/AIChatbot';
 
@@ -16,7 +15,7 @@ const goalLabels: Record<string, string> = {
 
 const Session = () => {
   const navigate = useNavigate();
-  const { studyGoal, energyLevel, plannedDuration, setSessionDuration } = useSession();
+  const { studyGoal, energyLevel, plannedDuration, setSessionDuration, addFocusScore } = useSession();
   const [secondsRemaining, setSecondsRemaining] = useState(plannedDuration * 60);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
@@ -24,48 +23,24 @@ const Session = () => {
   const [cameraAutoStarted, setCameraAutoStarted] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   
-  // Detection mode: 'posture' focuses on user, 'environment' focuses on desk
-  const [detectionMode, setDetectionMode] = useState<'posture' | 'environment'>('posture');
-  
   // MediaPipe-powered posture detection (local, no API calls)
-  // Only processes when in posture mode to reduce CPU/memory load
-  const enablePostureProcessing = detectionMode === 'posture';
   const { 
-    postureScore: mediaPipeScore, 
-    isDistracted: mediaPipeDistracted,
+    postureScore, 
+    isDistracted,
     isUsingCamera, 
     isLoading: isCameraLoading,
     faceDetected,
     poseDetected,
-    metrics,
     videoRef,
     canvasRef,
     startCamera, 
     stopCamera 
-  } = usePostureDetection(enablePostureProcessing);
-
-  // YOLO-powered object detection (phones, distracting items)
-  // ONLY runs in environment mode - mutually exclusive with posture detection
-  // This prevents both heavy ML systems from running simultaneously
-  const enableYolo = detectionMode === 'environment' && isUsingCamera;
-  
-  // Note: MediaPipe (posture) runs when camera is on
-  // YOLO only runs when explicitly in environment mode
-  // This reduces memory/CPU load significantly
-  const {
-    phoneDetected,
-    deskCluttered,
-    distractingItems,
-    allDetections,
-    isModelLoading: isYoloLoading,
-    isModelLoaded: isYoloLoaded,
-  } = useYoloDetection(videoRef, enableYolo);
+  } = usePostureDetection(true); // Always enabled
 
   // Auto-start camera when session loads
   useEffect(() => {
     if (!cameraAutoStarted && studyGoal && energyLevel) {
       setCameraAutoStarted(true);
-      // Small delay to ensure component is mounted
       const timer = setTimeout(() => {
         startCamera();
       }, 500);
@@ -73,26 +48,16 @@ const Session = () => {
     }
   }, [cameraAutoStarted, studyGoal, energyLevel, startCamera]);
 
-  // ---- COMBINED DISTRACTION LOGIC ----
-  // In posture mode: focus on head position
-  // In environment mode: focus on phone/clutter detection
-  const isDistracted = detectionMode === 'posture' 
-    ? mediaPipeDistracted || phoneDetected
-    : phoneDetected || deskCluttered || distractingItems.length > 2;
-  
-  // Combined posture score based on mode
-  let postureScore = mediaPipeScore;
-  if (detectionMode === 'environment') {
-    // Environment mode: score based on desk cleanliness
-    if (phoneDetected) postureScore = Math.min(postureScore, 0.3);
-    if (deskCluttered) postureScore = Math.min(postureScore, 0.4);
-    if (distractingItems.length > 0) {
-      postureScore = Math.max(0.2, postureScore - distractingItems.length * 0.15);
-    }
-  } else {
-    // Posture mode: phone still matters
-    if (phoneDetected) postureScore = Math.min(postureScore, 0.4);
-  }
+  // Track focus scores every 5 seconds when camera is active
+  useEffect(() => {
+    if (!isUsingCamera) return;
+    
+    const interval = setInterval(() => {
+      addFocusScore(postureScore);
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [isUsingCamera, postureScore, addFocusScore]);
 
   // LLM-powered nudge generation via Groq (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
@@ -101,15 +66,13 @@ const Session = () => {
     energyLevel
   });
 
-  // Convert 0-1 score to 1-10 display score
-  const displayScore = Math.round(postureScore * 10);
+  // Convert 0-1 score to 1-10 display score (harsher: apply power curve)
+  const displayScore = Math.round(Math.pow(postureScore, 1.3) * 10);
 
   // Ref for video container to attach the canvas element (shows landmarks)
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
   // Attach camera preview element to container when camera is active.
-  // - Posture mode: prefer canvas (landmarks)
-  // - Environment mode: prefer raw video (lower CPU/memory)
   useEffect(() => {
     const container = videoContainerRef.current;
     const canvas = canvasRef.current;
@@ -118,9 +81,7 @@ const Session = () => {
     if (isUsingCamera && container) {
       container.innerHTML = '';
 
-      const displayElement = detectionMode === 'environment'
-        ? video
-        : (canvas || video);
+      const displayElement = canvas || video;
 
       if (displayElement) {
         displayElement.style.width = '100%';
@@ -131,7 +92,8 @@ const Session = () => {
         container.appendChild(displayElement);
       }
     }
-  }, [isUsingCamera, detectionMode, canvasRef, videoRef]);
+  }, [isUsingCamera, canvasRef, videoRef]);
+
   // Redirect if no session data
   useEffect(() => {
     if (!studyGoal || !energyLevel) {
@@ -155,10 +117,8 @@ const Session = () => {
     
     const interval = setInterval(() => {
       if (isUnlimited) {
-        // Count up for unlimited mode
         setElapsedSeconds((s) => s + 1);
       } else {
-        // Count down for timed mode
         setSecondsRemaining((s) => {
           if (s <= 1) {
             setSessionComplete(true);
@@ -175,7 +135,6 @@ const Session = () => {
   // Flow level based on progress (for timed) or elapsed time (for unlimited)
   useEffect(() => {
     if (isUnlimited) {
-      // For unlimited, use time-based thresholds
       if (elapsedSeconds >= 300) {
         setFlowLevel('deep');
       } else if (elapsedSeconds >= 120) {
@@ -184,7 +143,6 @@ const Session = () => {
         setFlowLevel('building');
       }
     } else {
-      // For timed sessions, use progress percentage
       const progress = ((plannedDuration * 60 - secondsRemaining) / (plannedDuration * 60)) * 100;
       if (progress >= 66) {
         setFlowLevel('deep');
@@ -211,7 +169,7 @@ const Session = () => {
   // Calculate progress percentage for the bar
   const totalSeconds = plannedDuration * 60;
   const progressPercent = isUnlimited 
-    ? Math.min(100, (elapsedSeconds / 3600) * 100) // For unlimited, fill over 1 hour
+    ? Math.min(100, (elapsedSeconds / 3600) * 100)
     : Math.min(100, ((totalSeconds - secondsRemaining) / totalSeconds) * 100);
 
   const flowConfig = {
@@ -234,7 +192,7 @@ const Session = () => {
       {/* Center: Timer & Flow Indicator */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="text-center stagger-children">
-          {/* Large Timer - Countdown or Count-up for unlimited */}
+          {/* Large Timer */}
           <div className="mb-8">
             <span className={`text-8xl md:text-9xl font-extralight tracking-tight tabular-nums ${sessionComplete ? 'text-primary animate-pulse' : 'text-foreground'}`}>
               {isUnlimited ? formatTime(elapsedSeconds) : formatTime(secondsRemaining)}
@@ -259,7 +217,7 @@ const Session = () => {
               </span>
             </div>
             
-            {/* Flow Bar - based on actual progress */}
+            {/* Flow Bar */}
             <div className="w-56 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
                 className={`h-full bg-gradient-to-r ${flowConfig[flowLevel].barColor} transition-all duration-1000 ease-out rounded-full`}
@@ -268,48 +226,20 @@ const Session = () => {
             </div>
           </div>
 
-          {/* AI Nudge - LLM-generated supportive messages via Groq */}
+          {/* AI Nudge */}
           <div className="max-w-md mx-auto px-8 py-7 bg-card rounded-2xl border border-border shadow-medium">
             <p className={`text-base text-muted-foreground text-center leading-relaxed transition-opacity duration-300 ${isNudgeLoading ? 'opacity-50' : 'opacity-100'}`}>
               "{aiSuggestion}"
             </p>
             
-            {/* Detection Alerts */}
-            {isUsingCamera && (phoneDetected || deskCluttered || isDistracted) && (
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {phoneDetected && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-destructive/10 text-destructive text-xs font-medium rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                    Phone detected
-                  </span>
-                )}
-                {deskCluttered && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-600 text-xs font-medium rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Desk needs tidying
-                  </span>
-                )}
-                {isDistracted && !phoneDetected && !deskCluttered && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 text-xs font-medium rounded-full">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    Posture check
-                  </span>
-                )}
+            {/* Posture Alert */}
+            {isUsingCamera && isDistracted && (
+              <div className="mt-4 flex justify-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 text-xs font-medium rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  Posture check
+                </span>
               </div>
-            )}
-            
-            {/* Distracting Items List */}
-            {isUsingCamera && distractingItems && distractingItems.length > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground text-center">
-                Spotted: {distractingItems.join(', ')}
-              </p>
-            )}
-            
-            {/* YOLO Loading Indicator */}
-            {isUsingCamera && isYoloLoading && (
-              <p className="mt-2 text-xs text-muted-foreground text-center animate-pulse">
-                Loading object detection...
-              </p>
             )}
             
             <div className="mt-4 flex items-center justify-center gap-3">
@@ -336,57 +266,18 @@ const Session = () => {
                   <span className={`w-2 h-2 rounded-full ${poseDetected ? 'bg-flow-high' : 'bg-muted'}`} />
                   Pose
                 </span>
-                <span className={`flex items-center gap-1 ${isYoloLoaded ? 'text-flow-high' : 'text-muted-foreground/50'}`}>
-                  <span className={`w-2 h-2 rounded-full ${isYoloLoaded ? 'bg-flow-high' : 'bg-muted'}`} />
-                  Objects
-                </span>
               </div>
             )}
             
             {/* Camera Preview & Controls */}
             <div className="mt-5 pt-4 border-t border-border">
               {isUsingCamera && (
-                <>
-                  {/* Mode Toggle */}
-                  <div className="mb-4">
-                    <div className="flex justify-center gap-2">
-                      <button
-                        onClick={() => setDetectionMode('posture')}
-                        className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                          detectionMode === 'posture'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        👤 Posture Mode
-                      </button>
-                      <button
-                        onClick={() => setDetectionMode('environment')}
-                        disabled={isYoloLoading}
-                        className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
-                          detectionMode === 'environment'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:bg-secondary'
-                        } ${isYoloLoading ? 'opacity-50 cursor-wait' : ''}`}
-                      >
-                        {isYoloLoading ? '⏳ Loading...' : '🔍 Environment Mode'}
-                      </button>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground text-center">
-                      {detectionMode === 'posture' 
-                        ? 'Tracking your posture & head position' 
-                        : 'Scanning for phones & distractions'}
-                    </p>
-                  </div>
-                  
-                  {/* Video Preview */}
-                  <div className="mb-4">
-                    <div 
-                      ref={videoContainerRef}
-                      className="w-full aspect-video bg-muted rounded-xl overflow-hidden border border-border"
-                    />
-                  </div>
-                </>
+                <div className="mb-4">
+                  <div 
+                    ref={videoContainerRef}
+                    className="w-full aspect-video bg-muted rounded-xl overflow-hidden border border-border"
+                  />
+                </div>
               )}
               
               <button
