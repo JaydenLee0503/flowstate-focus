@@ -16,11 +16,13 @@ const goalLabels: Record<string, string> = {
 
 const Session = () => {
   const navigate = useNavigate();
-  const { studyGoal, energyLevel, setSessionDuration } = useSession();
-  const [seconds, setSeconds] = useState(0);
+  const { studyGoal, energyLevel, plannedDuration, setSessionDuration } = useSession();
+  const [secondsRemaining, setSecondsRemaining] = useState(plannedDuration * 60);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [flowLevel, setFlowLevel] = useState<'building' | 'flowing' | 'deep'>('building');
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
   const [cameraAutoStarted, setCameraAutoStarted] = useState(false);
+  const [sessionComplete, setSessionComplete] = useState(false);
   
   // Detection mode: 'posture' focuses on user, 'environment' focuses on desk
   const [detectionMode, setDetectionMode] = useState<'posture' | 'environment'>('posture');
@@ -124,24 +126,38 @@ const Session = () => {
     }
   }, [studyGoal, energyLevel, navigate]);
 
-  // Timer
+  // Initialize timer with planned duration
   useEffect(() => {
+    setSecondsRemaining(plannedDuration * 60);
+  }, [plannedDuration]);
+
+  // Countdown Timer
+  useEffect(() => {
+    if (sessionComplete) return;
+    
     const interval = setInterval(() => {
-      setSeconds((s) => s + 1);
+      setSecondsRemaining((s) => {
+        if (s <= 1) {
+          setSessionComplete(true);
+          return 0;
+        }
+        return s - 1;
+      });
+      setElapsedSeconds((s) => s + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [sessionComplete]);
 
-  // TODO: Replace with actual AI flow detection
+  // Flow level based on elapsed time
   useEffect(() => {
-    if (seconds >= 300) {
+    if (elapsedSeconds >= 300) {
       setFlowLevel('deep');
-    } else if (seconds >= 120) {
+    } else if (elapsedSeconds >= 120) {
       setFlowLevel('flowing');
     } else {
       setFlowLevel('building');
     }
-  }, [seconds]);
+  }, [elapsedSeconds]);
 
 
   const formatTime = useCallback((totalSeconds: number) => {
@@ -151,9 +167,13 @@ const Session = () => {
   }, []);
 
   const handleEndSession = () => {
-    setSessionDuration(seconds);
+    setSessionDuration(elapsedSeconds);
     navigate('/reflection');
   };
+
+  // Calculate progress percentage
+  const totalSeconds = plannedDuration * 60;
+  const progressPercent = Math.min(100, ((totalSeconds - secondsRemaining) / totalSeconds) * 100);
 
   const flowConfig = {
     building: { label: 'Building Focus', color: 'bg-flow-low', barColor: 'from-flow-low to-flow-medium', width: '33%' },
@@ -175,11 +195,14 @@ const Session = () => {
       {/* Center: Timer & Flow Indicator */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="text-center stagger-children">
-          {/* Large Timer */}
+          {/* Large Timer - Countdown */}
           <div className="mb-8">
-            <span className="text-8xl md:text-9xl font-extralight tracking-tight text-foreground tabular-nums">
-              {formatTime(seconds)}
+            <span className={`text-8xl md:text-9xl font-extralight tracking-tight tabular-nums ${sessionComplete ? 'text-primary animate-pulse' : 'text-foreground'}`}>
+              {formatTime(secondsRemaining)}
             </span>
+            {sessionComplete && (
+              <p className="mt-4 text-lg font-medium text-primary">Session Complete!</p>
+            )}
           </div>
 
           {/* Flow Indicator */}
@@ -382,7 +405,7 @@ const Session = () => {
                     End this session?
                   </Dialog.Title>
                   <Dialog.Description className="text-sm text-muted-foreground mb-6">
-                    You've been studying for {formatTime(seconds)}. Ready to reflect on your progress?
+                    You've been studying for {formatTime(elapsedSeconds)}. Ready to reflect on your progress?
                   </Dialog.Description>
 
                   <div className="flex gap-3">

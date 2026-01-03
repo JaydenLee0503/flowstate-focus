@@ -1,7 +1,7 @@
 import { useState, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RadioGroup, Listbox, Transition } from '@headlessui/react';
-import { Check, ChevronDown, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Sparkles, Clock } from 'lucide-react';
 import { useSession, StudyGoal, EnergyLevel } from '@/context/SessionContext';
 import { AIChatbot } from '@/components/AIChatbot';
 
@@ -17,11 +17,21 @@ const energyLevels: { value: EnergyLevel; label: string }[] = [
   { value: 'high', label: 'High' },
 ];
 
+const durationOptions: { value: number; label: string }[] = [
+  { value: 15, label: '15 min' },
+  { value: 25, label: '25 min' },
+  { value: 45, label: '45 min' },
+  { value: 60, label: '1 hour' },
+  { value: 90, label: '1.5 hours' },
+  { value: 120, label: '2 hours' },
+];
+
 const Index = forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
-  const { setStudyGoal, setEnergyLevel } = useSession();
+  const { setStudyGoal, setEnergyLevel, setPlannedDuration } = useSession();
   const [selectedGoal, setSelectedGoal] = useState<StudyGoal>(null);
   const [selectedEnergy, setSelectedEnergy] = useState<EnergyLevel>(null);
+  const [selectedDuration, setSelectedDuration] = useState(25);
 
   const canStart = selectedGoal && selectedEnergy;
 
@@ -29,6 +39,7 @@ const Index = forwardRef<HTMLElement>((_, ref) => {
     if (canStart) {
       setStudyGoal(selectedGoal);
       setEnergyLevel(selectedEnergy);
+      setPlannedDuration(selectedDuration);
       navigate('/session');
     }
   };
@@ -114,7 +125,7 @@ const Index = forwardRef<HTMLElement>((_, ref) => {
           </section>
 
           {/* Energy Level Selection - RadioGroup */}
-          <section className="mb-8">
+          <section className="mb-6">
             <label className="block text-sm font-medium text-foreground mb-2.5">
               Current energy level
             </label>
@@ -135,6 +146,30 @@ const Index = forwardRef<HTMLElement>((_, ref) => {
                 </RadioGroup.Option>
               ))}
             </RadioGroup>
+          </section>
+
+          {/* Duration Selection */}
+          <section className="mb-8">
+            <label className="block text-sm font-medium text-foreground mb-2.5">
+              <Clock className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
+              How long do you want to study?
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {durationOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSelectedDuration(option.value)}
+                  className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 border-2 ${
+                    selectedDuration === option.value
+                      ? 'border-primary bg-primary/5 text-primary shadow-soft'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </section>
 
           {/* Start Button */}
