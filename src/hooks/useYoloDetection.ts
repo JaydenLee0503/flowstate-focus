@@ -1,16 +1,16 @@
 // ---- FLOWSTATE: YOLO Object Detection Hook ----
-// Uses YOLO via Hugging Face Transformers to detect distracting objects (phones, food, etc.)
+// Uses DETR via Hugging Face Transformers to detect distracting objects (phones, food, etc.)
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { pipeline, env, ObjectDetectionPipeline } from "@huggingface/transformers";
+import { pipeline, env } from "@huggingface/transformers";
 
 // Configure transformers.js
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
 // Detection configuration
-const DETECTION_INTERVAL_MS = 2000; // Check every 2 seconds (YOLO is heavier than MediaPipe)
-const CONFIDENCE_THRESHOLD = 0.4;
+const DETECTION_INTERVAL_MS = 2000; // Check every 2 seconds
+const CONFIDENCE_THRESHOLD = 0.3; // Lower threshold for better detection
 
 // Objects we consider distracting
 const DISTRACTING_OBJECTS = [
@@ -31,20 +31,41 @@ const CLUTTER_LABELS = [
   'cup', 'bottle', 'wine glass', 'bowl', 'fork', 'knife', 'spoon'
 ];
 
+interface DetectionResult {
+  label: string;
+  score: number;
+  box: {
+    xmin: number;
+    ymin: number;
+    xmax: number;
+    ymax: number;
+  };
+}
+
 interface DetectionState {
   phoneDetected: boolean;
   deskCluttered: boolean;
   distractingItems: string[];
+  allDetections: DetectionResult[];
   isLoading: boolean;
   isModelLoaded: boolean;
   error: string | null;
 }
 
-export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | null>, isActive: boolean) {
+type ObjectDetectionPipeline = (
+  image: string,
+  options?: { threshold?: number }
+) => Promise<DetectionResult[]>;
+
+export function useYoloDetection(
+  videoRef: React.RefObject<HTMLVideoElement | null>, 
+  isActive: boolean
+) {
   const [state, setState] = useState<DetectionState>({
     phoneDetected: false,
     deskCluttered: false,
     distractingItems: [],
+    allDetections: [],
     isLoading: false,
     isModelLoaded: false,
     error: null,
@@ -53,30 +74,43 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
   const detectorRef = useRef<ObjectDetectionPipeline | null>(null);
   const intervalRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isInitializingRef = useRef(false);
 
   // Initialize YOLO model
   const initializeModel = useCallback(async () => {
-    if (detectorRef.current) return true;
+    if (detectorRef.current || isInitializingRef.current) return true;
+    
+    isInitializingRef.current = true;
     
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       console.log("[YOLO] Loading object detection model...");
       
-      // Use DETR (Detection Transformer) which is well-supported in transformers.js
-      // It's more accurate than YOLOv5 for browser use
-      const detector = await pipeline(
-        'object-detection',
-        'Xenova/detr-resnet-50',
-        { device: 'webgpu' }
-      );
+      // Try WebGPU first, fall back to WASM
+      let detector: any;
+      try {
+        detector = await pipeline(
+          'object-detection',
+          'Xenova/detr-resnet-50',
+          { device: 'webgpu' }
+        );
+        console.log("[YOLO] Using WebGPU acceleration");
+      } catch (gpuError) {
+        console.log("[YOLO] WebGPU not available, falling back to WASM");
+        detector = await pipeline(
+          'object-detection',
+          'Xenova/detr-resnet-50'
+        );
+      }
       
-      detectorRef.current = detector as ObjectDetectionPipeline;
+      detectorRef.current = detector;
       
       // Create canvas for frame capture
       canvasRef.current = document.createElement('canvas');
       
       console.log("[YOLO] Model loaded successfully");
       setState(prev => ({ ...prev, isLoading: false, isModelLoaded: true }));
+      isInitializingRef.current = false;
       return true;
     } catch (error) {
       console.error("[YOLO] Model loading failed:", error);
@@ -85,6 +119,7 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
         isLoading: false, 
         error: "Failed to load detection model" 
       }));
+      isInitializingRef.current = false;
       return false;
     }
   }, []);
@@ -99,12 +134,12 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     
-    // Use smaller resolution for faster detection
-    canvas.width = 320;
-    canvas.height = 240;
-    ctx.drawImage(video, 0, 0, 320, 240);
+    // Use larger resolution for better detection
+    canvas.width = 640;
+    canvas.height = 480;
+    ctx.drawImage(video, 0, 0, 640, 480);
     
-    return canvas.toDataURL('image/jpeg', 0.7);
+    return canvas.toDataURL('image/jpeg', 0.8);
   }, [videoRef]);
 
   // Run detection on current frame
@@ -122,22 +157,36 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
       
       if (!Array.isArray(results)) return;
       
-      // Filter and categorize detected objects
-      const detectedLabels = results
-        .filter((r: any) => r.score >= CONFIDENCE_THRESHOLD)
-        .map((r: any) => r.label.toLowerCase());
+      // Store all detections for debugging
+      const allDetections: DetectionResult[] = results
+        .filter((r): r is DetectionResult => 
+          typeof r === 'object' && 
+          r !== null && 
+          'label' in r && 
+          'score' in r
+        )
+        .map(r => ({
+          label: String(r.label).toLowerCase(),
+          score: Number(r.score),
+          box: r.box || { xmin: 0, ymin: 0, xmax: 0, ymax: 0 },
+        }));
+      
+      // Filter for high confidence detections
+      const detectedLabels = allDetections
+        .filter(r => r.score >= CONFIDENCE_THRESHOLD)
+        .map(r => r.label);
       
       // Check for phone
       const phoneDetected = detectedLabels.some(label => 
         PHONE_LABELS.some(phoneLabel => label.includes(phoneLabel))
       );
       
-      // Check for clutter (3+ items or food items)
+      // Check for clutter (2+ items or food items)
       const clutterItems = detectedLabels.filter(label =>
         CLUTTER_LABELS.some(clutterLabel => label.includes(clutterLabel))
       );
       const deskCluttered = clutterItems.length >= 2 || 
-        detectedLabels.some(label => ['pizza', 'donut', 'cake', 'sandwich'].includes(label));
+        detectedLabels.some(label => ['pizza', 'donut', 'cake', 'sandwich'].some(food => label.includes(food)));
       
       // Get unique distracting items
       const distractingItems = [...new Set(
@@ -151,10 +200,13 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
         phoneDetected,
         deskCluttered,
         distractingItems,
+        allDetections,
       }));
       
       if (distractingItems.length > 0) {
-        console.log("[YOLO] Detected:", distractingItems);
+        console.log("[YOLO] Detected:", distractingItems, "Confidence scores:", 
+          allDetections.filter(d => distractingItems.includes(d.label)).map(d => `${d.label}: ${(d.score * 100).toFixed(1)}%`)
+        );
       }
       
     } catch (error) {
@@ -164,7 +216,7 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
 
   // Start/stop detection loop based on isActive
   useEffect(() => {
-    if (isActive && !detectorRef.current && !state.isLoading) {
+    if (isActive && !detectorRef.current && !state.isLoading && !isInitializingRef.current) {
       initializeModel();
     }
     
@@ -190,7 +242,6 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      // Note: Pipeline doesn't have a dispose method, garbage collection handles it
     };
   }, []);
 
@@ -198,6 +249,7 @@ export function useYoloDetection(videoRef: React.RefObject<HTMLVideoElement | nu
     phoneDetected: state.phoneDetected,
     deskCluttered: state.deskCluttered,
     distractingItems: state.distractingItems,
+    allDetections: state.allDetections,
     isModelLoading: state.isLoading,
     isModelLoaded: state.isModelLoaded,
     error: state.error,

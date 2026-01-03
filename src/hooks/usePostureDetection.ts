@@ -1,14 +1,22 @@
-// ---- FLOWSTATE: MediaPipe Posture Detection Hook ----
-// Uses Face Mesh to detect head tilt as a proxy for posture/attention.
+// ---- FLOWSTATE: MediaPipe Holistic Posture Detection Hook ----
+// Uses Face Landmarker + Pose Landmarker for comprehensive posture analysis
 // Falls back to simulated logic if MediaPipe fails or camera is denied.
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { FaceLandmarker, FilesetResolver, FaceLandmarkerResult } from "@mediapipe/tasks-vision";
+import { 
+  FaceLandmarker, 
+  PoseLandmarker,
+  FilesetResolver, 
+  FaceLandmarkerResult,
+  PoseLandmarkerResult,
+  DrawingUtils
+} from "@mediapipe/tasks-vision";
 
 // ---- Configuration ----
 const POSTURE_THRESHOLD = 0.6; // Below this = distracted
-const UPDATE_INTERVAL_MS = 500; // How often to process frames
-const HEAD_TILT_MAX_DEGREES = 30; // Max tilt before score = 0
+const UPDATE_INTERVAL_MS = 100; // Process frames more frequently for smooth rendering
+const HEAD_TILT_MAX_DEGREES = 30;
+const SHOULDER_TILT_MAX_DEGREES = 15;
 
 // ---- Types ----
 interface PostureState {
@@ -18,6 +26,15 @@ interface PostureState {
   isCameraAvailable: boolean;
   isLoading: boolean;
   error: string | null;
+  faceDetected: boolean;
+  poseDetected: boolean;
+}
+
+interface PostureMetrics {
+  headTilt: number;
+  shoulderTilt: number;
+  headPosition: 'centered' | 'left' | 'right' | 'up' | 'down';
+  shoulderAlignment: 'good' | 'hunched' | 'tilted';
 }
 
 // ---- Simulated Fallback Logic ----
@@ -42,39 +59,93 @@ function useSimulatedFallback(enabled: boolean) {
   return { postureScore, isDistracted };
 }
 
-// ---- Head Tilt Calculation ----
-// Uses nose tip and forehead landmarks to calculate vertical head tilt
+// ---- Head Tilt Calculation from Face Landmarks ----
 function calculateHeadTilt(landmarks: { x: number; y: number; z: number }[]): number {
-  // Key landmarks: nose tip (1), forehead center (10), chin (152)
   const noseTip = landmarks[1];
   const forehead = landmarks[10];
   const chin = landmarks[152];
+  const leftEye = landmarks[33];
+  const rightEye = landmarks[263];
 
-  if (!noseTip || !forehead || !chin) return 0;
+  if (!noseTip || !forehead || !chin || !leftEye || !rightEye) return 0;
 
-  // Calculate vertical alignment - how much the head is tilted forward/backward
-  // When looking straight, nose should be roughly aligned between forehead and chin
+  // Calculate vertical tilt (looking up/down)
   const idealNoseY = (forehead.y + chin.y) / 2;
-  const tiltOffset = Math.abs(noseTip.y - idealNoseY);
+  const verticalTilt = Math.abs(noseTip.y - idealNoseY);
   
-  // Also check horizontal head rotation using nose position
-  const idealNoseX = (forehead.x + chin.x) / 2;
-  const rotationOffset = Math.abs(noseTip.x - idealNoseX);
+  // Calculate horizontal rotation (looking left/right)
+  const eyeMidpointX = (leftEye.x + rightEye.x) / 2;
+  const horizontalRotation = Math.abs(noseTip.x - eyeMidpointX);
 
-  // Combine offsets (weighted average)
-  const combinedOffset = tiltOffset * 0.6 + rotationOffset * 0.4;
+  // Calculate roll (head tilting sideways)
+  const eyeSlope = Math.abs(leftEye.y - rightEye.y);
   
-  // Convert to degrees (approximate)
+  // Combine all factors
+  const combinedOffset = verticalTilt * 0.4 + horizontalRotation * 0.3 + eyeSlope * 0.3;
   const tiltDegrees = combinedOffset * 180;
   
   return Math.min(tiltDegrees, HEAD_TILT_MAX_DEGREES);
 }
 
-// ---- Normalize Tilt to Posture Score ----
-function tiltToPostureScore(tiltDegrees: number): number {
-  // 0 degrees = perfect posture (score 1)
-  // HEAD_TILT_MAX_DEGREES = poor posture (score 0)
-  const normalized = 1 - (tiltDegrees / HEAD_TILT_MAX_DEGREES);
+// ---- Shoulder Tilt Calculation from Pose Landmarks ----
+function calculateShoulderTilt(landmarks: { x: number; y: number; z: number; visibility?: number }[]): number {
+  // Pose landmark indices: 11 = left shoulder, 12 = right shoulder
+  const leftShoulder = landmarks[11];
+  const rightShoulder = landmarks[12];
+  
+  if (!leftShoulder || !rightShoulder) return 0;
+  
+  // Check visibility - only calculate if shoulders are visible
+  const leftVisible = (leftShoulder.visibility ?? 0) > 0.5;
+  const rightVisible = (rightShoulder.visibility ?? 0) > 0.5;
+  
+  if (!leftVisible || !rightVisible) return 0;
+  
+  // Calculate shoulder tilt (should be level for good posture)
+  const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
+  const tiltDegrees = shoulderTilt * 90; // Convert to approximate degrees
+  
+  return Math.min(tiltDegrees, SHOULDER_TILT_MAX_DEGREES);
+}
+
+// ---- Calculate Posture Score from Pose Landmarks ----
+function calculatePosePosture(landmarks: { x: number; y: number; z: number; visibility?: number }[]): number {
+  // Key landmarks for posture
+  const nose = landmarks[0];
+  const leftShoulder = landmarks[11];
+  const rightShoulder = landmarks[12];
+  const leftEar = landmarks[7];
+  const rightEar = landmarks[8];
+  
+  if (!nose || !leftShoulder || !rightShoulder) return 0.5;
+  
+  let score = 1.0;
+  
+  // 1. Check shoulder alignment (should be level)
+  const shoulderTilt = Math.abs(leftShoulder.y - rightShoulder.y);
+  if (shoulderTilt > 0.05) score -= shoulderTilt * 2;
+  
+  // 2. Check if head is forward (ears should be above shoulders)
+  if (leftEar && rightEar) {
+    const earMidpointX = (leftEar.x + rightEar.x) / 2;
+    const shoulderMidpointX = (leftShoulder.x + rightShoulder.x) / 2;
+    const headForward = Math.abs(earMidpointX - shoulderMidpointX);
+    if (headForward > 0.1) score -= headForward;
+  }
+  
+  // 3. Check if person is centered in frame
+  const noseOffCenter = Math.abs(nose.x - 0.5);
+  if (noseOffCenter > 0.3) score -= (noseOffCenter - 0.3) * 0.5;
+  
+  // 4. Check vertical position (not slouching down in frame)
+  if (nose.y > 0.6) score -= (nose.y - 0.6) * 0.5;
+  
+  return Math.max(0, Math.min(1, score));
+}
+
+// ---- Normalize Scores ----
+function tiltToPostureScore(tiltDegrees: number, maxDegrees: number): number {
+  const normalized = 1 - (tiltDegrees / maxDegrees);
   return Math.max(0, Math.min(1, normalized));
 }
 
@@ -87,23 +158,34 @@ export function usePostureDetection() {
     isCameraAvailable: false,
     isLoading: false,
     error: null,
+    faceDetected: false,
+    poseDetected: false,
+  });
+
+  const [metrics, setMetrics] = useState<PostureMetrics>({
+    headTilt: 0,
+    shoulderTilt: 0,
+    headPosition: 'centered',
+    shoulderAlignment: 'good',
   });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+  const poseLandmarkerRef = useRef<PoseLandmarker | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastProcessTimeRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
+  const drawingUtilsRef = useRef<DrawingUtils | null>(null);
 
-  // Fallback to simulation when camera is not in use
   const fallback = useSimulatedFallback(!state.isUsingCamera);
 
   // ---- Initialize MediaPipe ----
   const initializeMediaPipe = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
+      console.log("[PostureDetection] Initializing MediaPipe holistic...");
 
-      // Load MediaPipe Vision WASM
       const vision = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
       );
@@ -118,11 +200,27 @@ export function usePostureDetection() {
         numFaces: 1,
         minFaceDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,
+        outputFaceBlendshapes: false,
+        outputFacialTransformationMatrixes: false,
       });
-
       faceLandmarkerRef.current = faceLandmarker;
+      console.log("[PostureDetection] Face Landmarker loaded");
+
+      // Create Pose Landmarker
+      const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+      poseLandmarkerRef.current = poseLandmarker;
+      console.log("[PostureDetection] Pose Landmarker loaded");
+
       setState(prev => ({ ...prev, isLoading: false }));
-      
       return true;
     } catch (error) {
       console.error("[PostureDetection] MediaPipe init failed:", error);
@@ -140,24 +238,23 @@ export function usePostureDetection() {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      // Initialize MediaPipe if not already done
-      if (!faceLandmarkerRef.current) {
+      if (!faceLandmarkerRef.current || !poseLandmarkerRef.current) {
         const success = await initializeMediaPipe();
         if (!success) return false;
       }
 
-      // Request camera access
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
-          width: { ideal: 320 }, // Low resolution for performance
-          height: { ideal: 240 },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
           facingMode: "user",
+          frameRate: { ideal: 30 },
         },
       });
 
       streamRef.current = stream;
 
-      // Create video element (will be attached to DOM by consumer if needed)
+      // Create video element
       const video = document.createElement("video");
       video.srcObject = stream;
       video.autoplay = true;
@@ -165,7 +262,20 @@ export function usePostureDetection() {
       video.muted = true;
       videoRef.current = video;
 
+      // Create canvas for drawing landmarks
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      canvasRef.current = canvas;
+
+      // Initialize drawing utils
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        drawingUtilsRef.current = new DrawingUtils(ctx);
+      }
+
       await video.play();
+      console.log("[PostureDetection] Camera started successfully");
 
       setState(prev => ({ 
         ...prev, 
@@ -193,32 +303,125 @@ export function usePostureDetection() {
   // ---- Process Video Frame ----
   const processFrame = useCallback(() => {
     const video = videoRef.current;
+    const canvas = canvasRef.current;
     const faceLandmarker = faceLandmarkerRef.current;
+    const poseLandmarker = poseLandmarkerRef.current;
+    const drawingUtils = drawingUtilsRef.current;
 
-    if (!video || !faceLandmarker || video.readyState < 2) {
+    if (!video || !faceLandmarker || !poseLandmarker || video.readyState < 2) {
       animationFrameRef.current = requestAnimationFrame(processFrame);
       return;
     }
 
     const now = performance.now();
     
-    // Throttle processing to UPDATE_INTERVAL_MS
     if (now - lastProcessTimeRef.current >= UPDATE_INTERVAL_MS) {
       lastProcessTimeRef.current = now;
 
       try {
-        const result: FaceLandmarkerResult = faceLandmarker.detectForVideo(video, now);
+        // Get face detection results
+        const faceResult: FaceLandmarkerResult = faceLandmarker.detectForVideo(video, now);
         
-        if (result.faceLandmarks && result.faceLandmarks.length > 0) {
-          const landmarks = result.faceLandmarks[0];
-          const tiltDegrees = calculateHeadTilt(landmarks);
-          const score = tiltToPostureScore(tiltDegrees);
+        // Get pose detection results
+        const poseResult: PoseLandmarkerResult = poseLandmarker.detectForVideo(video, now);
+
+        let faceScore = 0.5;
+        let poseScore = 0.5;
+        let faceDetected = false;
+        let poseDetected = false;
+
+        // Process face landmarks
+        if (faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0) {
+          faceDetected = true;
+          const faceLandmarks = faceResult.faceLandmarks[0];
+          const headTilt = calculateHeadTilt(faceLandmarks);
+          faceScore = tiltToPostureScore(headTilt, HEAD_TILT_MAX_DEGREES);
           
-          setState(prev => ({
+          setMetrics(prev => ({
             ...prev,
-            postureScore: score,
-            isDistracted: score < POSTURE_THRESHOLD,
+            headTilt,
+            headPosition: headTilt < 10 ? 'centered' : headTilt < 20 ? 'left' : 'right',
           }));
+        }
+
+        // Process pose landmarks
+        if (poseResult.landmarks && poseResult.landmarks.length > 0) {
+          poseDetected = true;
+          const poseLandmarks = poseResult.landmarks[0];
+          const shoulderTilt = calculateShoulderTilt(poseLandmarks);
+          const posePosture = calculatePosePosture(poseLandmarks);
+          
+          // Combine shoulder tilt and overall pose posture
+          const shoulderScore = tiltToPostureScore(shoulderTilt, SHOULDER_TILT_MAX_DEGREES);
+          poseScore = (shoulderScore * 0.4 + posePosture * 0.6);
+          
+          setMetrics(prev => ({
+            ...prev,
+            shoulderTilt,
+            shoulderAlignment: shoulderTilt < 5 ? 'good' : shoulderTilt < 10 ? 'tilted' : 'hunched',
+          }));
+
+          // Draw pose landmarks on canvas
+          if (canvas && drawingUtils) {
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              
+              // Draw pose connections
+              drawingUtils.drawConnectors(
+                poseLandmarks,
+                PoseLandmarker.POSE_CONNECTIONS,
+                { color: "#00FF00", lineWidth: 2 }
+              );
+              
+              // Draw pose landmarks
+              drawingUtils.drawLandmarks(poseLandmarks, {
+                color: "#FF0000",
+                lineWidth: 1,
+                radius: 3,
+              });
+              
+              // Draw face landmarks if available
+              if (faceDetected && faceResult.faceLandmarks[0]) {
+                drawingUtils.drawConnectors(
+                  faceResult.faceLandmarks[0],
+                  FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+                  { color: "#C0C0C070", lineWidth: 1 }
+                );
+                drawingUtils.drawConnectors(
+                  faceResult.faceLandmarks[0],
+                  FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
+                  { color: "#E0E0E0", lineWidth: 2 }
+                );
+              }
+            }
+          }
+        }
+
+        // Combine face and pose scores
+        // Weight: 40% face (attention), 60% pose (posture)
+        let combinedScore: number;
+        if (faceDetected && poseDetected) {
+          combinedScore = faceScore * 0.4 + poseScore * 0.6;
+        } else if (faceDetected) {
+          combinedScore = faceScore;
+        } else if (poseDetected) {
+          combinedScore = poseScore;
+        } else {
+          combinedScore = 0.5; // Default when nothing detected
+        }
+        
+        setState(prev => ({
+          ...prev,
+          postureScore: combinedScore,
+          isDistracted: combinedScore < POSTURE_THRESHOLD,
+          faceDetected,
+          poseDetected,
+        }));
+
+        if (faceDetected || poseDetected) {
+          console.log(`[PostureDetection] Face: ${faceDetected}, Pose: ${poseDetected}, Score: ${combinedScore.toFixed(2)}`);
         }
       } catch (error) {
         console.error("[PostureDetection] Frame processing error:", error);
@@ -230,29 +433,35 @@ export function usePostureDetection() {
 
   // ---- Stop Camera ----
   const stopCamera = useCallback(() => {
-    // Cancel animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
 
-    // Stop media stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
 
-    // Remove video element
     if (videoRef.current) {
       videoRef.current.remove();
       videoRef.current = null;
     }
+
+    if (canvasRef.current) {
+      canvasRef.current.remove();
+      canvasRef.current = null;
+    }
+
+    drawingUtilsRef.current = null;
 
     setState(prev => ({ 
       ...prev, 
       isUsingCamera: false,
       postureScore: 1,
       isDistracted: false,
+      faceDetected: false,
+      poseDetected: false,
     }));
   }, []);
 
@@ -264,11 +473,13 @@ export function usePostureDetection() {
         faceLandmarkerRef.current.close();
         faceLandmarkerRef.current = null;
       }
+      if (poseLandmarkerRef.current) {
+        poseLandmarkerRef.current.close();
+        poseLandmarkerRef.current = null;
+      }
     };
   }, [stopCamera]);
 
-  // ---- Return Values ----
-  // If camera is active, use real detection; otherwise use fallback
   return {
     postureScore: state.isUsingCamera ? state.postureScore : fallback.postureScore,
     isDistracted: state.isUsingCamera ? state.isDistracted : fallback.isDistracted,
@@ -276,10 +487,12 @@ export function usePostureDetection() {
     isCameraAvailable: state.isCameraAvailable,
     isLoading: state.isLoading,
     error: state.error,
+    faceDetected: state.faceDetected,
+    poseDetected: state.poseDetected,
+    metrics,
     videoRef,
+    canvasRef,
     startCamera,
     stopCamera,
   };
 }
-
-// ---- END MediaPipe Posture Detection Hook ----
