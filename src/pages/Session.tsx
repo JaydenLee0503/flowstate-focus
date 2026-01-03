@@ -23,8 +23,8 @@ const Session = () => {
   
   // MediaPipe-powered posture detection (local, no API calls)
   const { 
-    postureScore, 
-    isDistracted,
+    postureScore: mediaPipeScore, 
+    isDistracted: mediaPipeDistracted,
     isUsingCamera, 
     isLoading: isCameraLoading,
     videoRef,
@@ -40,7 +40,27 @@ const Session = () => {
     isModelLoading: isYoloLoading,
   } = useYoloDetection(videoRef, isUsingCamera);
 
-  // LLM-powered nudge generation (triggers on distraction state change)
+  // ---- COMBINED DISTRACTION LOGIC ----
+  // User is distracted if ANY of these signals fire:
+  // 1. MediaPipe detects poor head position
+  // 2. YOLO detects phone in frame
+  // 3. YOLO detects cluttered desk (multiple distracting items)
+  const isDistracted = mediaPipeDistracted || phoneDetected || deskCluttered;
+  
+  // Combined posture score that drops when distractions are detected
+  let postureScore = mediaPipeScore;
+  if (phoneDetected) {
+    postureScore = Math.min(postureScore, 0.3); // Phone = major focus drop
+  }
+  if (deskCluttered) {
+    postureScore = Math.min(postureScore, 0.5); // Clutter = moderate focus drop
+  }
+  if (distractingItems.length > 0) {
+    // Each distracting item reduces score slightly
+    postureScore = Math.max(0.2, postureScore - distractingItems.length * 0.1);
+  }
+
+  // LLM-powered nudge generation (triggers on combined distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
     isDistracted,
     studyGoal,
