@@ -1,11 +1,14 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { CheckCircle2, ArrowRight, X, Loader2 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const Reflection = () => {
   const navigate = useNavigate();
-  const { sessionDuration, studyGoal, resetSession } = useSession();
+  const { sessionDuration, studyGoal, energyLevel, averageFocusScore, resetSession } = useSession();
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [isLoadingInsight, setIsLoadingInsight] = useState(false);
 
   // Redirect if no session data
   useEffect(() => {
@@ -13,6 +16,39 @@ const Reflection = () => {
       navigate('/');
     }
   }, [studyGoal, sessionDuration, navigate]);
+
+  // Fetch AI insight from Groq
+  useEffect(() => {
+    const fetchInsight = async () => {
+      if (!studyGoal || sessionDuration === 0) return;
+      
+      setIsLoadingInsight(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('reflection-insights', {
+          body: {
+            averageFocusScore,
+            sessionDuration,
+            studyGoal,
+            energyLevel,
+          },
+        });
+
+        if (error) {
+          console.error('Error fetching insight:', error);
+          setAiInsight("Great job completing your session! Keep building momentum.");
+        } else {
+          setAiInsight(data.insight || data.error || "Great session! Keep up the focused work.");
+        }
+      } catch (err) {
+        console.error('Failed to fetch insight:', err);
+        setAiInsight("Great job completing your session! Every focused minute counts.");
+      } finally {
+        setIsLoadingInsight(false);
+      }
+    };
+
+    fetchInsight();
+  }, [studyGoal, sessionDuration, averageFocusScore, energyLevel]);
 
   const formatDuration = useCallback((totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -22,6 +58,19 @@ const Reflection = () => {
     }
     return `${mins} minute${mins !== 1 ? 's' : ''} and ${secs} second${secs !== 1 ? 's' : ''}`;
   }, []);
+
+  // Display score (0-10) with harsher curve
+  const displayFocusScore = Math.round(Math.pow(averageFocusScore, 1.3) * 10);
+  
+  // Get focus level label
+  const getFocusLabel = (score: number) => {
+    if (score >= 8) return { label: 'Excellent', color: 'text-flow-high' };
+    if (score >= 6) return { label: 'Good', color: 'text-flow-medium' };
+    if (score >= 4) return { label: 'Moderate', color: 'text-amber-500' };
+    return { label: 'Needs Work', color: 'text-destructive' };
+  };
+  
+  const focusInfo = getFocusLabel(displayFocusScore);
 
   const handleStartAnother = () => {
     resetSession();
@@ -55,15 +104,47 @@ const Reflection = () => {
           </p>
         </header>
 
-        {/* Summary Card */}
-        {/* TODO: Replace with actual AI-generated insights based on session data */}
+        {/* Average Focus Score Card */}
+        <section className="bg-card border border-border rounded-2xl p-6 mb-4 shadow-medium">
+          <h2 className="text-xs font-semibold text-primary uppercase tracking-wider mb-4">
+            Average Focus
+          </h2>
+          <div className="flex items-center justify-center gap-4">
+            <div className={`text-6xl font-bold ${focusInfo.color}`}>
+              {displayFocusScore}
+            </div>
+            <div className="text-left">
+              <div className="text-2xl text-muted-foreground">/10</div>
+              <div className={`text-sm font-medium ${focusInfo.color}`}>
+                {focusInfo.label}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 w-full h-2 bg-muted rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all duration-500 ${
+                displayFocusScore >= 6 ? 'bg-flow-high' : displayFocusScore >= 4 ? 'bg-flow-medium' : 'bg-destructive'
+              }`}
+              style={{ width: `${displayFocusScore * 10}%` }}
+            />
+          </div>
+        </section>
+
+        {/* AI Insight Card */}
         <section className="bg-card border border-border rounded-2xl p-6 mb-4 shadow-medium">
           <h2 className="text-xs font-semibold text-primary uppercase tracking-wider mb-3">
-            Session Insight
+            AI Insight
           </h2>
-          <p className="text-foreground text-[15px] leading-relaxed">
-            You stayed focused best when your posture was upright. Consider maintaining that awareness in future sessions.
-          </p>
+          {isLoadingInsight ? (
+            <div className="flex items-center justify-center gap-2 py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Analyzing your session...</span>
+            </div>
+          ) : (
+            <p className="text-foreground text-[15px] leading-relaxed">
+              {aiInsight}
+            </p>
+          )}
         </section>
 
         {/* Reflection Prompt */}
