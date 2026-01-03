@@ -284,8 +284,22 @@ export function usePostureDetection() {
         isCameraAvailable: true 
       }));
 
-      // Start processing loop
-      processFrame();
+      // Start processing loop after a small delay to ensure video is ready
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.readyState >= 2) {
+          processFrame();
+        } else {
+          // Wait for video to be ready
+          const checkReady = () => {
+            if (videoRef.current && videoRef.current.readyState >= 2) {
+              processFrame();
+            } else {
+              requestAnimationFrame(checkReady);
+            }
+          };
+          checkReady();
+        }
+      }, 100);
       
       return true;
     } catch (error) {
@@ -308,7 +322,20 @@ export function usePostureDetection() {
     const poseLandmarker = poseLandmarkerRef.current;
     const drawingUtils = drawingUtilsRef.current;
 
-    if (!video || !faceLandmarker || !poseLandmarker || video.readyState < 2) {
+    if (!video || video.readyState < 2) {
+      animationFrameRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+    
+    // Can proceed even without landmarkers - just draw video
+    if (!faceLandmarker && !poseLandmarker) {
+      // Just draw video to canvas for YOLO to use
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+      }
       animationFrameRef.current = requestAnimationFrame(processFrame);
       return;
     }
