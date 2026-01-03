@@ -43,6 +43,8 @@ const Session = () => {
   } = usePostureDetection();
 
   // YOLO-powered object detection (phones, distracting items)
+  // Only enabled in environment mode to reduce CPU/memory load
+  const enableYolo = detectionMode === 'environment' && isUsingCamera;
   const {
     phoneDetected,
     deskCluttered,
@@ -50,7 +52,7 @@ const Session = () => {
     allDetections,
     isModelLoading: isYoloLoading,
     isModelLoaded: isYoloLoaded,
-  } = useYoloDetection(videoRef, isUsingCamera);
+  } = useYoloDetection(videoRef, enableYolo);
 
   // Auto-start camera when session loads
   useEffect(() => {
