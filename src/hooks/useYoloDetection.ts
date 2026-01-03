@@ -76,6 +76,14 @@ export function useYoloDetection(
   const intervalRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isInitializingRef = useRef(false);
+  const isDetectingRef = useRef(false);
+  const failureCountRef = useRef(0);
+  const isActiveRef = useRef(false);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
 
   // Initialize YOLO model
   const initializeModel = useCallback(async () => {
@@ -133,20 +141,23 @@ export function useYoloDetection(
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
+
+    const width = Math.min(480, video.videoWidth || 480);
+    const height = Math.min(360, video.videoHeight || 360);
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(video, 0, 0, width, height);
     
-    // Use larger resolution for better detection
-    canvas.width = 640;
-    canvas.height = 480;
-    ctx.drawImage(video, 0, 0, 640, 480);
-    
-    return canvas.toDataURL('image/jpeg', 0.8);
+    return canvas.toDataURL('image/jpeg', 0.7);
   }, [videoRef]);
+
 
   // Run detection on current frame
   const detectObjects = useCallback(async () => {
     const detector = detectorRef.current;
-    if (!detector || !isActive) return;
+    if (!detector || !isActiveRef.current || isDetectingRef.current) return;
     
+    isDetectingRef.current = true;
     try {
       const frameData = captureFrame();
       if (!frameData) return;
@@ -156,8 +167,9 @@ export function useYoloDetection(
       });
       
       if (!Array.isArray(results)) return;
+
+      failureCountRef.current = 0;
       
-      // Store all detections for debugging
       const allDetections: DetectionResult[] = results
         .filter((r): r is DetectionResult => 
           typeof r === 'object' && 
@@ -171,24 +183,20 @@ export function useYoloDetection(
           box: r.box || { xmin: 0, ymin: 0, xmax: 0, ymax: 0 },
         }));
       
-      // Filter for high confidence detections
       const detectedLabels = allDetections
         .filter(r => r.score >= CONFIDENCE_THRESHOLD)
         .map(r => r.label);
       
-      // Check for phone
       const phoneDetected = detectedLabels.some(label => 
         PHONE_LABELS.some(phoneLabel => label.includes(phoneLabel))
       );
       
-      // Check for clutter (2+ items or food items)
       const clutterItems = detectedLabels.filter(label =>
         CLUTTER_LABELS.some(clutterLabel => label.includes(clutterLabel))
       );
       const deskCluttered = clutterItems.length >= 2 || 
         detectedLabels.some(label => ['pizza', 'donut', 'cake', 'sandwich'].some(food => label.includes(food)));
       
-      // Get unique distracting items
       const distractingItems = [...new Set(
         detectedLabels.filter(label =>
           DISTRACTING_OBJECTS.some(obj => label.includes(obj))
@@ -210,37 +218,66 @@ export function useYoloDetection(
       }
       
     } catch (error) {
+      failureCountRef.current += 1;
+      if (failureCountRef.current >= MAX_RETRIES) {
+        setState(prev => ({
+          ...prev,
+          error: 'Object detection paused after repeated errors.'
+        }));
+        isActiveRef.current = false;
+      }
       console.error("[YOLO] Detection error:", error);
+    } finally {
+      isDetectingRef.current = false;
     }
-  }, [captureFrame, isActive]);
+  }, [captureFrame]);
+
+  const startLoop = useCallback(() => {
+    const tick = async () => {
+      await detectObjects();
+      if (isActiveRef.current && detectorRef.current) {
+        intervalRef.current = window.setTimeout(tick, DETECTION_INTERVAL_MS);
+      }
+    };
+    tick();
+  }, [detectObjects]);
+
+
 
   // Start/stop detection loop based on isActive
   useEffect(() => {
-    if (isActive && !detectorRef.current && !state.isLoading && !isInitializingRef.current) {
-      initializeModel();
-    }
-    
-    if (isActive && detectorRef.current) {
-      // Start detection interval
-      intervalRef.current = window.setInterval(detectObjects, DETECTION_INTERVAL_MS);
-      
-      // Run initial detection
-      detectObjects();
-    }
-    
-    return () => {
+    if (!isActive) {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const ready = detectorRef.current || await initializeModel();
+      if (!cancelled && ready) {
+        startLoop();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (intervalRef.current) {
+        clearTimeout(intervalRef.current);
         intervalRef.current = null;
       }
     };
-  }, [isActive, initializeModel, detectObjects, state.isLoading]);
+  }, [isActive, initializeModel, startLoop]);
+
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current = null);
       }
     };
   }, []);
