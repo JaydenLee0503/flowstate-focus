@@ -177,11 +177,24 @@ export function usePostureDetection() {
   const lastProcessTimeRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
   const drawingUtilsRef = useRef<DrawingUtils | null>(null);
+  const isInitializingRef = useRef(false);
 
   const fallback = useSimulatedFallback(!state.isUsingCamera);
 
   // ---- Initialize MediaPipe ----
   const initializeMediaPipe = useCallback(async () => {
+    // Prevent double initialization
+    if (faceLandmarkerRef.current && poseLandmarkerRef.current) {
+      console.log("[PostureDetection] Already initialized, skipping...");
+      return true;
+    }
+    if (isInitializingRef.current) {
+      console.log("[PostureDetection] Already initializing, skipping...");
+      return false;
+    }
+    
+    isInitializingRef.current = true;
+    
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       console.log("[PostureDetection] Initializing MediaPipe holistic...");
@@ -221,6 +234,7 @@ export function usePostureDetection() {
       console.log("[PostureDetection] Pose Landmarker loaded");
 
       setState(prev => ({ ...prev, isLoading: false }));
+      isInitializingRef.current = false;
       return true;
     } catch (error) {
       console.error("[PostureDetection] MediaPipe init failed:", error);
@@ -229,6 +243,7 @@ export function usePostureDetection() {
         isLoading: false, 
         error: "Failed to initialize posture detection" 
       }));
+      isInitializingRef.current = false;
       return false;
     }
   }, []);
