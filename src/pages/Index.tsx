@@ -31,7 +31,8 @@ const Index = forwardRef<HTMLElement>((_, ref) => {
   const { setStudyGoal, setEnergyLevel, setPlannedDuration } = useSession();
   const [selectedGoal, setSelectedGoal] = useState<StudyGoal>(null);
   const [selectedEnergy, setSelectedEnergy] = useState<EnergyLevel>(null);
-  const [selectedDuration, setSelectedDuration] = useState(25);
+  const [selectedDuration, setSelectedDuration] = useState<number | 'custom' | 'unlimited'>(25);
+  const [customMinutes, setCustomMinutes] = useState('');
 
   const canStart = selectedGoal && selectedEnergy;
 
@@ -39,7 +40,18 @@ const Index = forwardRef<HTMLElement>((_, ref) => {
     if (canStart) {
       setStudyGoal(selectedGoal);
       setEnergyLevel(selectedEnergy);
-      setPlannedDuration(selectedDuration);
+      
+      // Calculate actual duration
+      let duration: number;
+      if (selectedDuration === 'unlimited') {
+        duration = 0; // 0 means unlimited
+      } else if (selectedDuration === 'custom') {
+        duration = parseInt(customMinutes) || 25;
+      } else {
+        duration = selectedDuration;
+      }
+      
+      setPlannedDuration(duration);
       navigate('/session');
     }
   };
@@ -169,10 +181,50 @@ const Index = forwardRef<HTMLElement>((_, ref) => {
                   {option.label}
                 </button>
               ))}
+              
+              {/* Custom Duration */}
+              <button
+                type="button"
+                onClick={() => setSelectedDuration('custom')}
+                className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 border-2 ${
+                  selectedDuration === 'custom'
+                    ? 'border-primary bg-primary/5 text-primary shadow-soft'
+                    : 'border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                }`}
+              >
+                Custom
+              </button>
+              
+              {/* Unlimited */}
+              <button
+                type="button"
+                onClick={() => setSelectedDuration('unlimited')}
+                className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 border-2 ${
+                  selectedDuration === 'unlimited'
+                    ? 'border-primary bg-primary/5 text-primary shadow-soft'
+                    : 'border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                }`}
+              >
+                ∞ Unlimited
+              </button>
             </div>
+            
+            {/* Custom Input */}
+            {selectedDuration === 'custom' && (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="480"
+                  placeholder="Enter minutes"
+                  value={customMinutes}
+                  onChange={(e) => setCustomMinutes(e.target.value)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border-2 border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none transition-colors"
+                />
+                <span className="text-sm text-muted-foreground">minutes</span>
+              </div>
+            )}
           </section>
-
-          {/* Start Button */}
           <button
             disabled={!canStart}
             onClick={handleStart}

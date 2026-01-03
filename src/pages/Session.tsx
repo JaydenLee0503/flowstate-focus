@@ -126,27 +126,38 @@ const Session = () => {
     }
   }, [studyGoal, energyLevel, navigate]);
 
+  // Check if unlimited mode (plannedDuration === 0)
+  const isUnlimited = plannedDuration === 0;
+
   // Initialize timer with planned duration
   useEffect(() => {
-    setSecondsRemaining(plannedDuration * 60);
-  }, [plannedDuration]);
+    if (!isUnlimited) {
+      setSecondsRemaining(plannedDuration * 60);
+    }
+  }, [plannedDuration, isUnlimited]);
 
-  // Countdown Timer
+  // Timer - counts down for timed sessions, counts up for unlimited
   useEffect(() => {
     if (sessionComplete) return;
     
     const interval = setInterval(() => {
-      setSecondsRemaining((s) => {
-        if (s <= 1) {
-          setSessionComplete(true);
-          return 0;
-        }
-        return s - 1;
-      });
-      setElapsedSeconds((s) => s + 1);
+      if (isUnlimited) {
+        // Count up for unlimited mode
+        setElapsedSeconds((s) => s + 1);
+      } else {
+        // Count down for timed mode
+        setSecondsRemaining((s) => {
+          if (s <= 1) {
+            setSessionComplete(true);
+            return 0;
+          }
+          return s - 1;
+        });
+        setElapsedSeconds((s) => s + 1);
+      }
     }, 1000);
     return () => clearInterval(interval);
-  }, [sessionComplete]);
+  }, [sessionComplete, isUnlimited]);
 
   // Flow level based on elapsed time
   useEffect(() => {
@@ -195,12 +206,15 @@ const Session = () => {
       {/* Center: Timer & Flow Indicator */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="text-center stagger-children">
-          {/* Large Timer - Countdown */}
+          {/* Large Timer - Countdown or Count-up for unlimited */}
           <div className="mb-8">
             <span className={`text-8xl md:text-9xl font-extralight tracking-tight tabular-nums ${sessionComplete ? 'text-primary animate-pulse' : 'text-foreground'}`}>
-              {formatTime(secondsRemaining)}
+              {isUnlimited ? formatTime(elapsedSeconds) : formatTime(secondsRemaining)}
             </span>
-            {sessionComplete && (
+            {isUnlimited && (
+              <p className="mt-2 text-sm text-muted-foreground">Unlimited session</p>
+            )}
+            {sessionComplete && !isUnlimited && (
               <p className="mt-4 text-lg font-medium text-primary">Session Complete!</p>
             )}
           </div>
