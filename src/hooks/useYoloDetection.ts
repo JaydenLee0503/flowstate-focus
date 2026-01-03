@@ -8,9 +8,10 @@ import { pipeline, env } from "@huggingface/transformers";
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-// Detection configuration
-const DETECTION_INTERVAL_MS = 2000; // Check every 2 seconds
+// Detection configuration - reduced frequency to prevent crashes
+const DETECTION_INTERVAL_MS = 5000; // Check every 5 seconds (reduced from 2s)
 const CONFIDENCE_THRESHOLD = 0.3; // Lower threshold for better detection
+const MAX_RETRIES = 2; // Limit retries on failure
 
 // Objects we consider distracting
 const DISTRACTING_OBJECTS = [
