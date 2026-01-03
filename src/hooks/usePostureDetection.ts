@@ -347,15 +347,9 @@ export function usePostureDetection(enableProcessing: boolean = true) {
       return;
     }
     
-    // If processing is disabled (environment mode), just draw video to canvas for YOLO
-    // Skip all MediaPipe detection to reduce CPU/memory load
+    // If processing is disabled (environment mode), skip ALL canvas drawing + MediaPipe work.
+    // The live preview can use the <video> element directly, and YOLO uses the video feed.
     if (!enableProcessingRef.current) {
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        }
-      }
       animationFrameRef.current = requestAnimationFrame(processFrame);
       return;
     }

@@ -8,6 +8,16 @@ import { pipeline, env } from "@huggingface/transformers";
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
+// Reduce chance of browser crashes due to onnxruntime-web WASM threading issues
+try {
+  // Setting to 1 disables multithreading (more stable on many devices)
+  (env as any).backends.onnx.wasm.numThreads = 1;
+  // Optional stability improvement (avoid spawning proxy worker)
+  (env as any).backends.onnx.wasm.proxy = false;
+} catch {
+  // ignore
+}
+
 // Detection configuration - reduced frequency & allocations to prevent crashes
 const DETECTION_INTERVAL_MS = 8000; // Check every 8 seconds
 const CONFIDENCE_THRESHOLD = 0.3; // Lower threshold for better detection
@@ -137,8 +147,8 @@ export function useYoloDetection(
   }, []);
 
   // Capture a downscaled frame from the video.
-  // IMPORTANT: return the canvas directly (avoid base64 toDataURL allocations which can crash the browser)
-  const captureFrame = useCallback((): HTMLCanvasElement | null => {
+  // Return a compressed data URL because the object-detection pipeline expects an image input (url/base64).
+  const captureFrame = useCallback((): string | null => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -159,7 +169,9 @@ export function useYoloDetection(
     if (canvas.height !== height) canvas.height = height;
 
     ctx.drawImage(video, 0, 0, width, height);
-    return canvas;
+
+    // Lower quality reduces allocations significantly
+    return canvas.toDataURL('image/jpeg', 0.55);
   }, [videoRef]);
 
 
@@ -171,10 +183,10 @@ export function useYoloDetection(
     
     isDetectingRef.current = true;
     try {
-      const frameCanvas = captureFrame();
-      if (!frameCanvas) return;
+      const frameData = captureFrame();
+      if (!frameData) return;
 
-      const results = await detector(frameCanvas, {
+      const results = await detector(frameData, {
         threshold: CONFIDENCE_THRESHOLD,
       });
       

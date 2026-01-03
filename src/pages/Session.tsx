@@ -107,17 +107,21 @@ const Session = () => {
   // Ref for video container to attach the canvas element (shows landmarks)
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
-  // Attach canvas (with landmarks) to container when camera is active
+  // Attach camera preview element to container when camera is active.
+  // - Posture mode: prefer canvas (landmarks)
+  // - Environment mode: prefer raw video (lower CPU/memory)
   useEffect(() => {
     const container = videoContainerRef.current;
     const canvas = canvasRef.current;
     const video = videoRef.current;
-    
+
     if (isUsingCamera && container) {
       container.innerHTML = '';
-      
-      // Use canvas if available (shows pose landmarks), otherwise use video
-      const displayElement = canvas || video;
+
+      const displayElement = detectionMode === 'environment'
+        ? video
+        : (canvas || video);
+
       if (displayElement) {
         displayElement.style.width = '100%';
         displayElement.style.height = '100%';
@@ -127,7 +131,7 @@ const Session = () => {
         container.appendChild(displayElement);
       }
     }
-  }, [isUsingCamera, canvasRef, videoRef]);
+  }, [isUsingCamera, detectionMode, canvasRef, videoRef]);
   // Redirect if no session data
   useEffect(() => {
     if (!studyGoal || !energyLevel) {
