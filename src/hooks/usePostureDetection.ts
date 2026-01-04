@@ -69,21 +69,31 @@ function calculateHeadTilt(landmarks: { x: number; y: number; z: number }[]): nu
 
   if (!noseTip || !forehead || !chin || !leftEye || !rightEye) return 0;
 
-  // Calculate vertical tilt (looking up/down)
+  // Vertical tilt (looking up/down)
   const idealNoseY = (forehead.y + chin.y) / 2;
   const verticalTilt = Math.abs(noseTip.y - idealNoseY);
-  
-  // Calculate horizontal rotation (looking left/right)
+
+  // Horizontal rotation proxy (nose drifting away from eye midpoint)
   const eyeMidpointX = (leftEye.x + rightEye.x) / 2;
   const horizontalRotation = Math.abs(noseTip.x - eyeMidpointX);
 
-  // Calculate roll (head tilting sideways)
+  // Roll (head tilting sideways)
   const eyeSlope = Math.abs(leftEye.y - rightEye.y);
-  
-  // Combine all factors
-  const combinedOffset = verticalTilt * 0.4 + horizontalRotation * 0.3 + eyeSlope * 0.3;
-  const tiltDegrees = combinedOffset * 180;
-  
+
+  // Yaw proxy (looking left/right): asymmetric distances from nose to each eye
+  const leftEyeDist = Math.abs(noseTip.x - leftEye.x);
+  const rightEyeDist = Math.abs(rightEye.x - noseTip.x);
+  const yawAsymmetry = Math.abs(leftEyeDist - rightEyeDist) / Math.max(leftEyeDist, rightEyeDist, 1e-6);
+
+  // Combine factors into a single deviation score.
+  const combinedOffset =
+    verticalTilt * 0.22 +
+    horizontalRotation * 0.22 +
+    eyeSlope * 0.18 +
+    yawAsymmetry * 0.38;
+
+  // Convert to degrees-ish scale, then clamp.
+  const tiltDegrees = combinedOffset * 120;
   return Math.min(tiltDegrees, HEAD_TILT_MAX_DEGREES);
 }
 
@@ -183,6 +193,7 @@ export function usePostureDetection(enableProcessing: boolean = true) {
   const streamRef = useRef<MediaStream | null>(null);
   const drawingUtilsRef = useRef<DrawingUtils | null>(null);
   const isInitializingRef = useRef(false);
+  const lastStatusLogRef = useRef<{ distracted: boolean; face: boolean; pose: boolean } | null>(null);
 
   const fallback = useSimulatedFallback(!state.isUsingCamera);
 
@@ -481,25 +492,28 @@ export function usePostureDetection(enableProcessing: boolean = true) {
         // Weight: 40% face (attention), 60% pose (posture)
         let combinedScore: number;
         let distracted = false;
-        
-        // CRITICAL: If face is NOT detected, user is likely looking away - mark as distracted
+
+        // If face isn't detected, user is very likely looking away.
         if (!faceDetected) {
-          combinedScore = 0.3; // Low score when face not visible
+          combinedScore = 0.3;
           distracted = true;
         } else if (faceDetected && poseDetected) {
           combinedScore = faceScore * 0.4 + poseScore * 0.6;
-          distracted = combinedScore < POSTURE_THRESHOLD;
+
+          // Attention should dominate: if face attention drops, treat as distracted
+          // even if posture is still great.
+          distracted = combinedScore < POSTURE_THRESHOLD || faceScore < 0.55;
         } else if (faceDetected) {
           combinedScore = faceScore;
-          distracted = combinedScore < POSTURE_THRESHOLD;
+          distracted = faceScore < 0.55;
         } else if (poseDetected) {
           combinedScore = poseScore;
           distracted = combinedScore < POSTURE_THRESHOLD;
         } else {
-          combinedScore = 0.3; // Default when nothing detected = distracted
+          combinedScore = 0.3;
           distracted = true;
         }
-        
+
         setState(prev => ({
           ...prev,
           postureScore: combinedScore,
@@ -508,7 +522,13 @@ export function usePostureDetection(enableProcessing: boolean = true) {
           poseDetected,
         }));
 
-        console.log(`[PostureDetection] Face: ${faceDetected}, Pose: ${poseDetected}, Score: ${combinedScore.toFixed(2)}, Distracted: ${distracted}`);
+        const last = lastStatusLogRef.current;
+        if (!last || last.distracted !== distracted || last.face !== faceDetected || last.pose !== poseDetected) {
+          console.log(
+            `[PostureDetection] Face: ${faceDetected}, Pose: ${poseDetected}, Score: ${combinedScore.toFixed(2)}, Distracted: ${distracted}`,
+          );
+          lastStatusLogRef.current = { distracted, face: faceDetected, pose: poseDetected };
+        }
       } catch (error) {
         console.error("[PostureDetection] Frame processing error:", error);
       }

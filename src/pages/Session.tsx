@@ -23,7 +23,7 @@ const Session = () => {
   const [cameraAutoStarted, setCameraAutoStarted] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [showDistractionReminder, setShowDistractionReminder] = useState(false);
-  const distractionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const distractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // Play notification sound using Web Audio API
@@ -33,7 +33,9 @@ const Session = () => {
         audioContextRef.current = new AudioContext();
       }
       const ctx = audioContextRef.current;
-      
+      if (ctx.state === 'suspended') {
+        void ctx.resume();
+      }
       // Create a gentle two-tone notification
       const playTone = (frequency: number, startTime: number, duration: number) => {
         const oscillator = ctx.createOscillator();
@@ -106,10 +108,15 @@ const Session = () => {
     return () => clearInterval(interval);
   }, [isUsingCamera, sessionComplete, addFocusScore]);
 
-  // Track 10-second distraction reminder
+  // Track 7-second distraction reminder
   useEffect(() => {
     if (isDistracted && isUsingCamera && !sessionComplete) {
       // Start 7-second timer when distracted
+      if (distractionTimerRef.current) {
+        clearTimeout(distractionTimerRef.current);
+        distractionTimerRef.current = null;
+      }
+
       distractionTimerRef.current = setTimeout(() => {
         setShowDistractionReminder(true);
         playNotificationSound();
@@ -122,13 +129,14 @@ const Session = () => {
       }
       setShowDistractionReminder(false);
     }
-    
+
     return () => {
       if (distractionTimerRef.current) {
         clearTimeout(distractionTimerRef.current);
+        distractionTimerRef.current = null;
       }
     };
-  }, [isDistracted, isUsingCamera, sessionComplete]);
+  }, [isDistracted, isUsingCamera, sessionComplete, playNotificationSound]);
 
   // LLM-powered nudge generation via Groq (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
