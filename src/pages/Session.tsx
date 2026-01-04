@@ -22,6 +22,8 @@ const Session = () => {
   const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
   const [cameraAutoStarted, setCameraAutoStarted] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const [showDistractionReminder, setShowDistractionReminder] = useState(false);
+  const distractionTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // MediaPipe-powered posture detection (local, no API calls)
   const { 
@@ -67,6 +69,29 @@ const Session = () => {
     
     return () => clearInterval(interval);
   }, [isUsingCamera, sessionComplete, addFocusScore]);
+
+  // Track 10-second distraction reminder
+  useEffect(() => {
+    if (isDistracted && isUsingCamera && !sessionComplete) {
+      // Start 10-second timer when distracted
+      distractionTimerRef.current = setTimeout(() => {
+        setShowDistractionReminder(true);
+      }, 10000);
+    } else {
+      // Clear timer and hide reminder when focused again
+      if (distractionTimerRef.current) {
+        clearTimeout(distractionTimerRef.current);
+        distractionTimerRef.current = null;
+      }
+      setShowDistractionReminder(false);
+    }
+    
+    return () => {
+      if (distractionTimerRef.current) {
+        clearTimeout(distractionTimerRef.current);
+      }
+    };
+  }, [isDistracted, isUsingCamera, sessionComplete]);
 
   // LLM-powered nudge generation via Groq (triggers on distraction state change)
   const { nudge: aiSuggestion, isLoading: isNudgeLoading } = useNudgeGenerator({
@@ -241,8 +266,17 @@ const Session = () => {
               "{aiSuggestion}"
             </p>
             
+            {/* 10-Second Distraction Reminder */}
+            {showDistractionReminder && (
+              <div className="mt-4 p-4 bg-destructive/10 border border-destructive/30 rounded-xl animate-pulse">
+                <p className="text-destructive font-semibold text-center">
+                  Hey! You've been looking away for a while. Time to refocus!
+                </p>
+              </div>
+            )}
+            
             {/* Posture Alert */}
-            {isUsingCamera && isDistracted && (
+            {isUsingCamera && isDistracted && !showDistractionReminder && (
               <div className="mt-4 flex justify-center">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 text-xs font-medium rounded-full">
                   <span className="w-2 h-2 rounded-full bg-blue-500" />
