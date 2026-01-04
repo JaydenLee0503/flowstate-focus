@@ -480,27 +480,35 @@ export function usePostureDetection(enableProcessing: boolean = true) {
         // Combine face and pose scores
         // Weight: 40% face (attention), 60% pose (posture)
         let combinedScore: number;
-        if (faceDetected && poseDetected) {
+        let distracted = false;
+        
+        // CRITICAL: If face is NOT detected, user is likely looking away - mark as distracted
+        if (!faceDetected) {
+          combinedScore = 0.3; // Low score when face not visible
+          distracted = true;
+        } else if (faceDetected && poseDetected) {
           combinedScore = faceScore * 0.4 + poseScore * 0.6;
+          distracted = combinedScore < POSTURE_THRESHOLD;
         } else if (faceDetected) {
           combinedScore = faceScore;
+          distracted = combinedScore < POSTURE_THRESHOLD;
         } else if (poseDetected) {
           combinedScore = poseScore;
+          distracted = combinedScore < POSTURE_THRESHOLD;
         } else {
-          combinedScore = 0.5; // Default when nothing detected
+          combinedScore = 0.3; // Default when nothing detected = distracted
+          distracted = true;
         }
         
         setState(prev => ({
           ...prev,
           postureScore: combinedScore,
-          isDistracted: combinedScore < POSTURE_THRESHOLD,
+          isDistracted: distracted,
           faceDetected,
           poseDetected,
         }));
 
-        if (faceDetected || poseDetected) {
-          console.log(`[PostureDetection] Face: ${faceDetected}, Pose: ${poseDetected}, Score: ${combinedScore.toFixed(2)}`);
-        }
+        console.log(`[PostureDetection] Face: ${faceDetected}, Pose: ${poseDetected}, Score: ${combinedScore.toFixed(2)}, Distracted: ${distracted}`);
       } catch (error) {
         console.error("[PostureDetection] Frame processing error:", error);
       }
