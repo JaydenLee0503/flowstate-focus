@@ -24,6 +24,42 @@ const Session = () => {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [showDistractionReminder, setShowDistractionReminder] = useState(false);
   const distractionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Play notification sound using Web Audio API
+  const playNotificationSound = useCallback(() => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContext();
+      }
+      const ctx = audioContextRef.current;
+      
+      // Create a gentle two-tone notification
+      const playTone = (frequency: number, startTime: number, duration: number) => {
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.frequency.value = frequency;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      };
+      
+      const now = ctx.currentTime;
+      playTone(523, now, 0.15); // C5
+      playTone(659, now + 0.15, 0.2); // E5
+    } catch (e) {
+      console.log('Could not play notification sound');
+    }
+  }, []);
   
   // MediaPipe-powered posture detection (local, no API calls)
   const { 
@@ -76,6 +112,7 @@ const Session = () => {
       // Start 10-second timer when distracted
       distractionTimerRef.current = setTimeout(() => {
         setShowDistractionReminder(true);
+        playNotificationSound();
       }, 10000);
     } else {
       // Clear timer and hide reminder when focused again
