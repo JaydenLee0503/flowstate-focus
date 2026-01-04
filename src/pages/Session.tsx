@@ -109,11 +109,11 @@ const Session = () => {
   // Track 10-second distraction reminder
   useEffect(() => {
     if (isDistracted && isUsingCamera && !sessionComplete) {
-      // Start 10-second timer when distracted
+      // Start 7-second timer when distracted
       distractionTimerRef.current = setTimeout(() => {
         setShowDistractionReminder(true);
         playNotificationSound();
-      }, 10000);
+      }, 7000);
     } else {
       // Clear timer and hide reminder when focused again
       if (distractionTimerRef.current) {
